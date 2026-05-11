@@ -33,6 +33,9 @@ class Receipt(Base):
 
     total = Column(Numeric(10, 2))
     currency = Column(String(10))
+    total_discount = Column(Numeric(10, 2), default=0)
+    store_cashback_total = Column(Numeric(10, 2), default=0)
+    smartcart_cashback_total = Column(Numeric(10, 2), default=0)
 
     image_url = Column(Text)
     ocr_raw_text = Column(Text)
@@ -60,11 +63,16 @@ class ReceiptItem(Base):
     price = Column(Numeric(10, 2), nullable=False)
 
     quantity = Column(Numeric(10, 2), default=1)
+    unit = Column(String(30), default="шт")
+    discount_amount = Column(Numeric(10, 2), default=0)
+    store_cashback_amount = Column(Numeric(10, 2), default=0)
+    store_cashback_percent = Column(Numeric(5, 2), default=0)
+    smartcart_cashback_amount = Column(Numeric(10, 2), default=0)
 
     category = Column(String(100))
 
-    # 🔥 NEW FIELDS
     brand = Column(String(255))
+    thumbnail = Column(String(50))
     is_promotional = Column(Boolean, default=False)
 
     created_at = Column(
@@ -74,4 +82,70 @@ class ReceiptItem(Base):
 
     receipt = relationship("Receipt", back_populates="items")
 
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), unique=True, nullable=False)
+    description = Column(Text)
+    category = Column(String(100))
+    brand = Column(String(255))
+    unit = Column(String(30), default="шт")
+    thumbnail = Column(String(50))
+    is_tracked = Column(Boolean, default=True)
+    has_cashback = Column(Boolean, default=False)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    prices = relationship("ProductPrice", back_populates="product")
+    cashback_offers = relationship("CashbackOffer", back_populates="product")
+
+
+class Store(Base):
+    __tablename__ = "stores"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), unique=True, nullable=False)
+    logo = Column(String(50))
+    logo_text = Column(String(100))
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    prices = relationship("ProductPrice", back_populates="store")
+    cashback_offers = relationship("CashbackOffer", back_populates="store")
+
+
+class ProductPrice(Base):
+    __tablename__ = "product_prices"
+
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    store_id = Column(Integer, ForeignKey("stores.id", ondelete="CASCADE"), nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
+    currency = Column(String(10), default="UAH")
+    observed_at = Column(TIMESTAMP, nullable=False)
+    is_promotional = Column(Boolean, default=False)
+    source = Column(String(50), default="manual")
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    product = relationship("Product", back_populates="prices")
+    store = relationship("Store", back_populates="prices")
+
+
+class CashbackOffer(Base):
+    __tablename__ = "cashback_offers"
+
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"))
+    store_id = Column(Integer, ForeignKey("stores.id", ondelete="CASCADE"))
+    title = Column(String(255))
+    cashback_percent = Column(Numeric(5, 2), default=0)
+    cashback_amount = Column(Numeric(10, 2), default=0)
+    starts_at = Column(TIMESTAMP)
+    ends_at = Column(TIMESTAMP)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    product = relationship("Product", back_populates="cashback_offers")
+    store = relationship("Store", back_populates="cashback_offers")
 

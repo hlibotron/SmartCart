@@ -1,11 +1,10 @@
 import asyncio
-from app.db.database import engine, Base
-from app.db import models
+from app.db.database import engine
+from app.db.schema import ensure_schema
 
 
 async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await ensure_schema(engine)
 
 
 if __name__ == "__main__":

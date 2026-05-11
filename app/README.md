@@ -9,6 +9,22 @@ Git (опційно)
 DBeaver (для перевірки БД)
 🐳 2. Піднімаємо PostgreSQL (Docker)
 docker run --name ai-receipts-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=receipts_db -p 5432:5432 -d postgres
+
+Важливо: для SmartCart використовується саме Docker-БД `ai-receipts-db`
+з базою `receipts_db`. Якщо порт `5432` вже зайнятий локальним PostgreSQL
+або іншою БД, Docker-контейнер не зможе коректно зайняти цей порт.
+
+Перевірити, хто слухає `5432`:
+
+sudo ss -ltnp 'sport = :5432'
+
+Якщо там не `ai-receipts-db`, а локальний процес `postgres`, зупини локальний
+PostgreSQL перед запуском Docker-БД для цього проєкту:
+
+sudo systemctl stop postgresql
+
+Після цього запусти команду `docker run` вище.
+
 ✔ Перевірка
 docker ps
 
@@ -16,6 +32,14 @@ docker ps
 
 ai-receipts-db
 status: Up
+
+Перевірка підключення до проєктної БД:
+
+PGPASSWORD=postgres psql -h 127.0.0.1 -p 5432 -U postgres -d receipts_db -c 'select current_database(), current_user;'
+
+Очікувано:
+
+receipts_db | postgres
 📁 3. Створення проєкту
 mkdir ai_receipts_backend
 cd ai_receipts_backend
@@ -55,24 +79,43 @@ AsyncSessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
-🧠 9. Створення таблиць
-app/init_db.py
-import asyncio
-from app.db.database import engine, Base
-from app.db import models
+🧠 9. Створення/оновлення таблиць
 
-async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+Команда нижче створює таблиці й безпечно додає нові nullable/default-колонки,
+якщо вони потрібні фронтенду. Вона не очищає існуючі дані.
 
-if __name__ == "__main__":
-    asyncio.run(init_db())
-запуск:
 python -m app.init_db
+
+Перевірка схеми без змін у БД:
+
+python -m app.check_db
+
+Очікувано:
+
+database=receipts_db
+user=postgres
+schema=ok
+
+У цьому репозиторії `DATABASE_URL` можна тримати в локальному `.env`:
+
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/receipts_db
+
+Файл `.env` не додається в git. Для команди є приклад `.env.example`.
 📊 10. Моделі (таблиці)
 app/db/models.py
 
-(твій файл уже готовий з users, receipts, receipt_items)
+Основні таблиці:
+
+users
+receipts
+receipt_items
+
+Додаткові таблиці для frontend-аналітики та майбутніх реальних даних:
+
+products
+stores
+product_prices
+cashback_offers
 
 🚀 11. FastAPI сервер
 app/main.py
@@ -94,6 +137,11 @@ http://127.0.0.1:8000
 Swagger:
 
 http://127.0.0.1:8000/docs
+
+Health endpoints:
+
+curl -s http://127.0.0.1:8000/health
+curl -s http://127.0.0.1:8000/api/db/health
 🧪 14. Перевірка БД
 
 Через DBeaver:
