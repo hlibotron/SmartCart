@@ -4,6 +4,7 @@ import {
   receiptSummary as fallbackReceiptSummary,
 } from "../data/receipts.js";
 import { fetchJson, rerenderRoute } from "../shared/api.js";
+import { appHref } from "../shared/navigation.js";
 
 let receiptsData = {
   receipts: fallbackReceipts,
@@ -104,7 +105,7 @@ export function bindReceiptsPage() {
       const receiptPath = card.dataset.receiptId
         ? `/receipt-summary?receipt=${encodeURIComponent(card.dataset.receiptId)}`
         : "/receipt-summary";
-      window.history.pushState({}, "", receiptPath);
+      window.history.pushState({}, "", appHref(receiptPath));
       window.dispatchEvent(new Event("popstate"));
     });
   });

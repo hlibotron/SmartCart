@@ -1,7 +1,9 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
 from decimal import Decimal
+from difflib import SequenceMatcher
 from math import ceil, floor
+import re
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,8 +12,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
-from app.db.models import Product, Receipt, ReceiptItem, Store, User
-from app.schemas import ReceiptCreate, ReceiptCreated
+from app.db.models import (
+    Product,
+    ProductAlias,
+    ProductMatchCandidate,
+    Receipt,
+    ReceiptItem,
+    ReceiptOcrJob,
+    Store,
+    User,
+)
+from app.schemas import (
+    MatchCandidateResolve,
+    OcrReceiptParsed,
+    ReceiptCreate,
+    ReceiptCreated,
+    ReceiptScanCreate,
+    ReceiptScanCreated,
+    ReceiptScanProcessed,
+)
 
 
 app = FastAPI(title="SmartCart API")
@@ -37,6 +56,9 @@ CURRENCY_SYMBOLS = {
     "USD": "$",
     "EUR": "€",
 }
+
+AUTO_MATCH_THRESHOLD = Decimal("0.86")
+REVIEW_MATCH_THRESHOLD = Decimal("0.65")
 
 CATEGORY_META = {
     "молочні": ("dairy", "#16a34a", "#eaf8ef", "milk"),
@@ -118,6 +140,20 @@ def item_gross_total(item: ReceiptItem) -> Decimal:
 
 def item_net_total(item: ReceiptItem) -> Decimal:
     return max(Decimal("0"), item_gross_total(item) - to_decimal(item.discount_amount))
+
+
+def normalize_name(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = value.lower().replace("’", "'")
+    normalized = re.sub(r"[^0-9a-zа-яіїєґ%.' ]+", " ", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def display_name_from_raw(value: str) -> str:
+    normalized = normalize_name(value)
+    return normalized[:1].upper() + normalized[1:] if normalized else value.strip()
 
 
 def receipt_date(receipt: Receipt) -> datetime:
@@ -206,39 +242,172 @@ async def upsert_store(db: AsyncSession, name: str | None) -> Store | None:
     return store
 
 
-async def upsert_product(db: AsyncSession, item) -> Product:
+async def upsert_product_values(
+    db: AsyncSession,
+    *,
+    name: str,
+    category: str | None = None,
+    brand: str | None = None,
+    unit: str | None = "шт",
+    thumbnail: str | None = None,
+    has_cashback: bool = False,
+) -> Product:
     result = await db.execute(
-        select(Product).where(func.lower(Product.name) == item.item_name.lower())
+        select(Product).where(func.lower(Product.name) == name.lower())
     )
     product = result.scalar_one_or_none()
-    thumbnail = item.thumbnail or thumb_for(item.item_name, item.category)
-    has_cashback = (
-        item.store_cashback_amount > 0
-        or item.store_cashback_percent > 0
-        or item.smartcart_cashback_amount > 0
-    )
+    thumbnail = thumbnail or thumb_for(name, category)
 
     if product is None:
         product = Product(
-            name=item.item_name,
-            description=item.brand or item.category or "Товар з чеків",
-            category=item.category,
-            brand=item.brand,
-            unit=item.unit or "шт",
+            name=name,
+            description=brand or category or "Товар з чеків",
+            category=category,
+            brand=brand,
+            unit=unit or "шт",
             thumbnail=thumbnail,
             has_cashback=has_cashback,
         )
         db.add(product)
         await db.flush()
     else:
-        product.description = product.description or item.brand or item.category
-        product.category = product.category or item.category
-        product.brand = product.brand or item.brand
-        product.unit = product.unit or item.unit or "шт"
+        product.description = product.description or brand or category
+        product.category = product.category or category
+        product.brand = product.brand or brand
+        product.unit = product.unit or unit or "шт"
         product.thumbnail = product.thumbnail or thumbnail
         product.has_cashback = product.has_cashback or has_cashback
 
     return product
+
+
+async def upsert_product(db: AsyncSession, item) -> Product:
+    has_cashback = (
+        item.store_cashback_amount > 0
+        or item.store_cashback_percent > 0
+        or item.smartcart_cashback_amount > 0
+    )
+    return await upsert_product_values(
+        db,
+        name=item.item_name,
+        category=item.category,
+        brand=item.brand,
+        unit=item.unit or "шт",
+        thumbnail=item.thumbnail,
+        has_cashback=has_cashback,
+    )
+
+
+async def ensure_alias(
+    db: AsyncSession,
+    *,
+    product_id: int,
+    store_id: int | None,
+    raw_name: str,
+    confidence: Decimal = Decimal("1"),
+):
+    normalized = normalize_name(raw_name)
+    if not normalized:
+        return
+
+    stmt = select(ProductAlias).where(
+        ProductAlias.product_id == product_id,
+        ProductAlias.normalized_name == normalized,
+    )
+    if store_id:
+        stmt = stmt.where(ProductAlias.store_id == store_id)
+
+    result = await db.execute(stmt)
+    alias = result.scalar_one_or_none()
+
+    if alias is None:
+        db.add(
+            ProductAlias(
+                product_id=product_id,
+                store_id=store_id,
+                raw_name=raw_name,
+                normalized_name=normalized,
+                confidence=confidence,
+            )
+        )
+
+
+async def find_product_match(
+    db: AsyncSession,
+    *,
+    raw_name: str,
+    parsed_name: str | None,
+    store_id: int | None,
+) -> dict:
+    normalized_raw = normalize_name(raw_name)
+    normalized_parsed = normalize_name(parsed_name)
+
+    alias_stmt = select(ProductAlias).where(ProductAlias.normalized_name == normalized_raw)
+    if store_id:
+        alias_stmt = alias_stmt.where(
+            (ProductAlias.store_id == store_id) | (ProductAlias.store_id.is_(None))
+        )
+    alias_result = await db.execute(alias_stmt.options(selectinload(ProductAlias.product)))
+    alias = alias_result.scalars().first()
+    if alias and alias.product:
+        return {
+            "product": alias.product,
+            "confidence": to_decimal(alias.confidence) or Decimal("1"),
+            "match_type": "alias",
+            "status": "matched",
+        }
+
+    products_result = await db.execute(select(Product))
+    products = products_result.scalars().all()
+
+    best_product = None
+    best_score = Decimal("0")
+    best_type = "unmatched"
+    for product in products:
+        product_name = normalize_name(product.name)
+        candidates = [normalized_raw]
+        if normalized_parsed:
+            candidates.append(normalized_parsed)
+
+        for candidate in candidates:
+            if not candidate:
+                continue
+            if candidate == product_name:
+                return {
+                    "product": product,
+                    "confidence": Decimal("1"),
+                    "match_type": "exact",
+                    "status": "matched",
+                }
+
+            score = Decimal(str(round(SequenceMatcher(None, candidate, product_name).ratio(), 2)))
+            if score > best_score:
+                best_product = product
+                best_score = score
+                best_type = "fuzzy"
+
+    if best_product and best_score >= AUTO_MATCH_THRESHOLD:
+        return {
+            "product": best_product,
+            "confidence": best_score,
+            "match_type": best_type,
+            "status": "matched",
+        }
+
+    if best_product and best_score >= REVIEW_MATCH_THRESHOLD:
+        return {
+            "product": best_product,
+            "confidence": best_score,
+            "match_type": best_type,
+            "status": "pending",
+        }
+
+    return {
+        "product": None,
+        "confidence": Decimal("0"),
+        "match_type": "new_product",
+        "status": "pending",
+    }
 
 
 @app.post("/receipts", response_model=ReceiptCreated)
@@ -301,10 +470,12 @@ async def create_receipt(payload: ReceiptCreate, db: AsyncSession = Depends(get_
 
     receipt_items = []
     for item in payload.items:
-        await upsert_product(db, item)
+        product = await upsert_product(db, item)
         receipt_items.append(
             ReceiptItem(
                 receipt_id=receipt.id,
+                product_id=product.id,
+                raw_name=item.raw_name,
                 item_name=item.item_name,
                 price=item.price,
                 quantity=item.quantity,
@@ -317,6 +488,8 @@ async def create_receipt(payload: ReceiptCreate, db: AsyncSession = Depends(get_
                 brand=item.brand,
                 thumbnail=item.thumbnail,
                 is_promotional=item.is_promotional,
+                match_confidence=Decimal("1"),
+                match_status="manual",
             )
         )
 
@@ -485,6 +658,261 @@ async def get_receipt(receipt_id: int, db: AsyncSession = Depends(get_db)):
     if receipt is None:
         raise HTTPException(status_code=404, detail="Receipt not found")
     return receipt_detail_payload(receipt)
+
+
+@app.post("/receipt-scans", response_model=ReceiptScanCreated)
+@app.post("/api/receipt-scans", response_model=ReceiptScanCreated)
+async def create_receipt_scan(payload: ReceiptScanCreate, db: AsyncSession = Depends(get_db)):
+    user_result = await db.execute(
+        select(User).where(User.telegram_id == payload.user.telegram_id)
+    )
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        user = User(
+            telegram_id=payload.user.telegram_id,
+            username=payload.user.username,
+        )
+        db.add(user)
+        await db.flush()
+    elif payload.user.username and user.username != payload.user.username:
+        user.username = payload.user.username
+
+    job = ReceiptOcrJob(
+        user_id=user.id,
+        image_url=payload.image_url,
+        ocr_raw_text=payload.ocr_raw_text,
+        provider=payload.provider,
+        processing_status="pending",
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    return ReceiptScanCreated(id=job.id, status=job.processing_status)
+
+
+@app.post("/receipt-scans/{scan_id}/parsed", response_model=ReceiptScanProcessed)
+@app.post("/api/receipt-scans/{scan_id}/parsed", response_model=ReceiptScanProcessed)
+async def process_receipt_scan(
+    scan_id: int,
+    payload: OcrReceiptParsed,
+    db: AsyncSession = Depends(get_db),
+):
+    job_result = await db.execute(select(ReceiptOcrJob).where(ReceiptOcrJob.id == scan_id))
+    job = job_result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Receipt scan not found")
+    if not payload.items:
+        raise HTTPException(status_code=422, detail="Parsed receipt must include at least one item")
+
+    store = await upsert_store(db, payload.store)
+    store_id = store.id if store else None
+
+    total_discount = sum((item.discount_amount for item in payload.items), Decimal("0"))
+    store_cashback_total = sum(
+        (item.store_cashback_amount for item in payload.items),
+        Decimal("0"),
+    )
+    smartcart_cashback_total = sum(
+        (item.smartcart_cashback_amount for item in payload.items),
+        Decimal("0"),
+    )
+    calculated_total = sum(
+        (
+            max(Decimal("0"), item.price * item.quantity - item.discount_amount)
+            for item in payload.items
+        ),
+        Decimal("0"),
+    )
+
+    receipt = Receipt(
+        user_id=job.user_id,
+        store=payload.store,
+        receipt_datetime=payload.receipt_datetime or datetime.utcnow(),
+        total=payload.total if payload.total is not None else calculated_total,
+        currency=payload.currency,
+        total_discount=total_discount,
+        store_cashback_total=store_cashback_total,
+        smartcart_cashback_total=smartcart_cashback_total,
+        image_url=job.image_url,
+        ocr_raw_text=payload.ocr_raw_text or job.ocr_raw_text,
+        processing_status="processed",
+    )
+    db.add(receipt)
+    await db.flush()
+
+    matched_items = 0
+    pending_items = 0
+    for item in payload.items:
+        parsed_name = item.item_name or display_name_from_raw(item.raw_name)
+        match = await find_product_match(
+            db,
+            raw_name=item.raw_name,
+            parsed_name=parsed_name,
+            store_id=store_id,
+        )
+        product = match["product"]
+        match_status = match["status"]
+        confidence = match["confidence"]
+        match_type = match["match_type"]
+
+        if product is None:
+            product = await upsert_product_values(
+                db,
+                name=parsed_name,
+                category=item.category,
+                brand=item.brand,
+                unit=item.unit or "шт",
+                thumbnail=item.thumbnail,
+                has_cashback=(
+                    item.store_cashback_amount > 0
+                    or item.store_cashback_percent > 0
+                    or item.smartcart_cashback_amount > 0
+                ),
+            )
+            match_type = "new_product"
+            match_status = "pending"
+
+        if match_status == "matched":
+            matched_items += 1
+            await ensure_alias(
+                db,
+                product_id=product.id,
+                store_id=store_id,
+                raw_name=item.raw_name,
+                confidence=confidence,
+            )
+        else:
+            pending_items += 1
+
+        receipt_item = ReceiptItem(
+            receipt_id=receipt.id,
+            product_id=product.id,
+            raw_name=item.raw_name,
+            item_name=product.name if match_status == "matched" else parsed_name,
+            price=item.price,
+            quantity=item.quantity,
+            unit=item.unit or "шт",
+            discount_amount=item.discount_amount,
+            store_cashback_amount=item.store_cashback_amount,
+            store_cashback_percent=item.store_cashback_percent,
+            smartcart_cashback_amount=item.smartcart_cashback_amount,
+            category=item.category,
+            brand=item.brand,
+            thumbnail=item.thumbnail or product.thumbnail,
+            is_promotional=item.is_promotional,
+            match_confidence=confidence,
+            match_status=match_status,
+        )
+        db.add(receipt_item)
+        await db.flush()
+
+        if match_status != "matched":
+            db.add(
+                ProductMatchCandidate(
+                    receipt_ocr_job_id=job.id,
+                    receipt_item_id=receipt_item.id,
+                    product_id=product.id,
+                    raw_name=item.raw_name,
+                    normalized_name=normalize_name(item.raw_name),
+                    confidence=confidence,
+                    match_type=match_type,
+                    status="pending",
+                )
+            )
+
+    job.receipt_id = receipt.id
+    job.ocr_raw_text = payload.ocr_raw_text or job.ocr_raw_text
+    job.processing_status = "processed"
+    job.processed_at = datetime.utcnow()
+
+    await db.commit()
+
+    return ReceiptScanProcessed(
+        scan_id=job.id,
+        receipt_id=receipt.id,
+        status=job.processing_status,
+        matched_items=matched_items,
+        pending_items=pending_items,
+    )
+
+
+@app.get("/product-match-candidates")
+@app.get("/api/product-match-candidates")
+async def list_match_candidates(
+    status: str = "pending",
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ProductMatchCandidate)
+        .where(ProductMatchCandidate.status == status)
+        .order_by(ProductMatchCandidate.created_at.desc())
+    )
+    candidates = result.scalars().all()
+    return {
+        "candidates": [
+            {
+                "id": candidate.id,
+                "receiptOcrJobId": candidate.receipt_ocr_job_id,
+                "receiptItemId": candidate.receipt_item_id,
+                "productId": candidate.product_id,
+                "rawName": candidate.raw_name,
+                "normalizedName": candidate.normalized_name,
+                "confidence": float(to_decimal(candidate.confidence)),
+                "matchType": candidate.match_type,
+                "status": candidate.status,
+            }
+            for candidate in candidates
+        ]
+    }
+
+
+@app.post("/product-match-candidates/{candidate_id}/resolve")
+@app.post("/api/product-match-candidates/{candidate_id}/resolve")
+async def resolve_match_candidate(
+    candidate_id: int,
+    payload: MatchCandidateResolve,
+    db: AsyncSession = Depends(get_db),
+):
+    candidate_result = await db.execute(
+        select(ProductMatchCandidate).where(ProductMatchCandidate.id == candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="Match candidate not found")
+
+    product_result = await db.execute(select(Product).where(Product.id == payload.product_id))
+    product = product_result.scalar_one_or_none()
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    item_result = await db.execute(
+        select(ReceiptItem).where(ReceiptItem.id == candidate.receipt_item_id)
+    )
+    receipt_item = item_result.scalar_one_or_none()
+    if receipt_item:
+        receipt_item.product_id = product.id
+        receipt_item.item_name = product.name
+        receipt_item.thumbnail = receipt_item.thumbnail or product.thumbnail
+        receipt_item.match_status = "matched"
+        receipt_item.match_confidence = Decimal("1")
+
+    if payload.create_alias:
+        await ensure_alias(
+            db,
+            product_id=product.id,
+            store_id=None,
+            raw_name=candidate.raw_name,
+            confidence=Decimal("1"),
+        )
+
+    candidate.product_id = product.id
+    candidate.confidence = Decimal("1")
+    candidate.status = "resolved"
+    candidate.resolved_at = datetime.utcnow()
+
+    await db.commit()
+    return {"status": "ok", "candidateId": candidate.id, "productId": product.id}
 
 
 @app.get("/products")

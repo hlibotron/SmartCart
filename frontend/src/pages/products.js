@@ -7,6 +7,7 @@ import {
 } from "../data/products.js";
 import { fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
+import { appHref } from "../shared/navigation.js";
 
 let pageData = {
   dailyRecommendation: fallbackDailyRecommendation,
@@ -204,7 +205,7 @@ export function bindProductsPage() {
       window.history.pushState(
         {},
         "",
-        `/product-price?product=${encodeURIComponent(card.dataset.productName)}`,
+        appHref(`/product-price?product=${encodeURIComponent(card.dataset.productName)}`),
       );
       window.dispatchEvent(new Event("popstate"));
     });

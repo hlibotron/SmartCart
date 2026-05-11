@@ -11,12 +11,16 @@ ADDITIVE_COLUMNS = {
         ("smartcart_cashback_total", "NUMERIC(10, 2) DEFAULT 0"),
     ],
     "receipt_items": [
+        ("product_id", "INTEGER REFERENCES products(id) ON DELETE SET NULL"),
+        ("raw_name", "VARCHAR(255)"),
         ("unit", "VARCHAR(30) DEFAULT 'шт'"),
         ("discount_amount", "NUMERIC(10, 2) DEFAULT 0"),
         ("store_cashback_amount", "NUMERIC(10, 2) DEFAULT 0"),
         ("store_cashback_percent", "NUMERIC(5, 2) DEFAULT 0"),
         ("smartcart_cashback_amount", "NUMERIC(10, 2) DEFAULT 0"),
         ("thumbnail", "VARCHAR(50)"),
+        ("match_confidence", "NUMERIC(5, 2) DEFAULT 0"),
+        ("match_status", "VARCHAR(50) DEFAULT 'unmatched'"),
     ],
 }
 

@@ -1,5 +1,6 @@
 import { activities, metrics, shortcuts } from "../data/home.js";
 import { icon } from "../shared/icons.js";
+import { appHref } from "../shared/navigation.js";
 
 function renderHeroArt() {
   return `
@@ -35,7 +36,7 @@ function renderShortcut(shortcut) {
   return `
     <a
       class="shortcut-card interactive"
-      href="${shortcut.path}"
+      href="${appHref(shortcut.path)}"
       data-link
       data-section="${shortcut.title}"
     >

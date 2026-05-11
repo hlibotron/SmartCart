@@ -2,13 +2,14 @@ import "./styles/main.css";
 import { navigationItems } from "./data/navigation.js";
 import { routes } from "./router.js";
 import { cartIcon, icon } from "./shared/icons.js";
+import { appHref, stripBasePath } from "./shared/navigation.js";
 
 const app = document.querySelector("#app");
 
 const pageTitle = document.title;
 
 function getRoute(pathname = window.location.pathname) {
-  return routes[pathname] ?? routes["/"];
+  return routes[stripBasePath(pathname)] ?? routes["/"];
 }
 
 function renderStatusBar() {
@@ -32,13 +33,13 @@ function renderHeader(route) {
         ${
           route.backPath
             ? `
-              <a class="back-button interactive" href="${route.backPath}" data-link aria-label="Назад">
+              <a class="back-button interactive" href="${appHref(route.backPath)}" data-link aria-label="Назад">
                 ${icon("arrowLeft")}
               </a>
             `
             : ""
         }
-        <a class="brand" href="/" data-link aria-label="SmartCart головна">
+        <a class="brand" href="${appHref("/")}" data-link aria-label="SmartCart головна">
           ${cartIcon("brand-icon")}
           <span>Smart<span>Cart</span></span>
         </a>
@@ -60,7 +61,7 @@ function renderBottomNav(activePath) {
           return `
             <a
               class="nav-item interactive${active ? " active" : ""}"
-              href="${item.path}"
+              href="${appHref(item.path)}"
               data-link
               data-page="${item.label}"
               ${active ? 'aria-current="page"' : ""}
@@ -96,12 +97,14 @@ function renderApp() {
 }
 
 function navigateTo(path) {
-  if (window.location.pathname === path) {
+  const currentPath = `${stripBasePath(window.location.pathname)}${window.location.search}`;
+
+  if (currentPath === path) {
     renderApp();
     return;
   }
 
-  window.history.pushState({}, "", path);
+  window.history.pushState({}, "", appHref(path));
   renderApp();
   document.querySelector("#page")?.focus({ preventScroll: true });
 }
@@ -121,7 +124,7 @@ function bindGlobalInteractions() {
         console.log(`Navigate to: ${link.dataset.page}`);
       }
 
-      navigateTo(url.pathname);
+      navigateTo(`${stripBasePath(url.pathname)}${url.search}`);
     });
   });
 

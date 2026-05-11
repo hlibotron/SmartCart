@@ -117,6 +117,57 @@ stores
 product_prices
 cashback_offers
 
+Таблиці для OCR/AI сканування чеків:
+
+receipt_ocr_jobs
+product_aliases
+product_match_candidates
+
+OCR pipeline:
+
+1. Зовнішній OCR/AI сервіс читає фото чеку.
+2. Backend отримує `image_url` і створює scan job:
+
+curl -X POST http://127.0.0.1:8000/api/receipt-scans \
+  -H 'Content-Type: application/json' \
+  -d '{"user":{"telegram_id":1001,"username":"demo"},"image_url":"https://example.com/receipt.jpg","provider":"manual"}'
+
+3. OCR/AI повертає структурований JSON у backend:
+
+curl -X POST http://127.0.0.1:8000/api/receipt-scans/1/parsed \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "store":"АТБ",
+    "receipt_datetime":"2026-05-11T12:35:00",
+    "currency":"UAH",
+    "items":[{
+      "raw_name":"МОЛОКО ГАЛИЧИНА 2.5% 900Г",
+      "item_name":"Молоко 2.5%",
+      "price":24.90,
+      "quantity":2,
+      "unit":"шт",
+      "discount_amount":4.00,
+      "category":"Молочні",
+      "brand":"Галичина",
+      "thumbnail":"milk",
+      "is_promotional":true
+    }]
+  }'
+
+4. Backend match-ить `raw_name` з `products` і `product_aliases`.
+5. Якщо збіг впевнений, чек записується як matched.
+6. Якщо збіг невпевнений, створюється `product_match_candidates` для ручного підтвердження.
+
+Перегляд pending-кандидатів:
+
+curl -s http://127.0.0.1:8000/api/product-match-candidates
+
+Підтвердження кандидата і створення alias для майбутніх чеків:
+
+curl -X POST http://127.0.0.1:8000/api/product-match-candidates/1/resolve \
+  -H 'Content-Type: application/json' \
+  -d '{"product_id":12,"create_alias":true}'
+
 🚀 11. FastAPI сервер
 app/main.py
 from fastapi import FastAPI
