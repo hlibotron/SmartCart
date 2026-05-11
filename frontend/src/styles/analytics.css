@@ -444,7 +444,27 @@
   white-space: nowrap;
 }
 
-@media (max-width: 399px) {
+@media (min-width: 404px) and (max-width: 700px) {
+  .analytics-page h1 {
+    font-size: 38px;
+  }
+
+  .analytics-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+  }
+
+  .analytics-table {
+    --analytics-table-columns: 40px minmax(0, 0.9fr) minmax(76px, 0.42fr) minmax(48px, 0.3fr) 18px;
+    --analytics-table-gap: 8px;
+  }
+}
+
+@media (max-width: 403px) {
   .analytics-page h1 {
     font-size: 35px;
   }

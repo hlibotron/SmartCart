@@ -308,7 +308,17 @@
   background: #f6fbf8;
 }
 
-@media (max-width: 399px) {
+@media (min-width: 404px) and (max-width: 700px) {
+  .top {
+    padding-inline: 18px;
+  }
+
+  .brand > span {
+    font-size: 28px;
+  }
+}
+
+@media (max-width: 403px) {
   .top {
     padding-inline: 14px;
   }

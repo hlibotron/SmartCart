@@ -41,8 +41,10 @@ function renderShortcut(shortcut) {
       data-section="${shortcut.title}"
     >
       <span class="round-icon">${icon(shortcut.icon)}</span>
-      <strong>${shortcut.title}</strong>
-      <span>${shortcut.description}</span>
+      <span class="shortcut-copy">
+        <strong>${shortcut.title}</strong>
+        <span>${shortcut.description}</span>
+      </span>
       ${icon("chevron", "chevron")}
     </a>
   `;
@@ -72,7 +74,6 @@ export function renderHomePage() {
 
     <section class="hero-card" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <h2 id="hero-title">Контролюйте покупки, ціни та кешбек в одному місці</h2>
         <p>Скануйте чеки, порівнюйте ціни та отримуйте кешбек за покупки</p>
         <button class="scan-button interactive" type="button" id="scanButton">
           ${icon("camera")}

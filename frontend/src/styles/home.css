@@ -16,7 +16,7 @@
 .hero-copy {
   position: relative;
   z-index: 2;
-  padding-left: 32px;
+  padding-left: 12px;
 }
 
 .hero-copy h2 {
@@ -33,6 +33,7 @@
   color: #596174;
   font-size: 16px;
   line-height: 1.32;
+  font-weight: 700;
 }
 
 .scan-button {
@@ -64,9 +65,8 @@
 .hero-art {
   position: relative;
   min-height: 188px;
-  scale: 1.7;
-  margin-bottom: 48px;
-  margin-right: 48px;
+  margin-bottom: 18px;
+  margin-right: 18px;
 }
 
 .art-blob {
@@ -316,10 +316,10 @@
 .shortcut-card {
   position: relative;
   display: flex;
-  min-height: 168px;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 16px 11px 32px;
+
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--card);
@@ -329,17 +329,24 @@
 }
 
 .shortcut-card .round-icon {
-  margin-bottom: 18px;
+  flex: 0 0 auto;
+}
+
+.shortcut-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
 }
 
 .shortcut-card strong {
   color: #111827;
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 550;
   line-height: 1.13;
 }
 
-.shortcut-card > span:not(.round-icon) {
+.shortcut-copy > span {
   display: block;
   margin-top: 10px;
   color: #596174;
@@ -348,9 +355,8 @@
 }
 
 .shortcut-card .chevron {
-  position: absolute;
-  right: 10px;
-  bottom: 14px;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .insights-grid {
@@ -541,7 +547,56 @@
   color: var(--green);
 }
 
-@media (max-width: 399px) {
+@media (min-width: 404px) and (max-width: 700px) {
+  .hero-card {
+    grid-template-columns: minmax(0, 1fr) 124px;
+    padding: 24px 16px 20px;
+  }
+
+  .hero-copy p {
+    font-size: 15px;
+  }
+
+  .scan-button {
+    min-height: 44px;
+    padding-inline: 16px;
+    font-size: 15px;
+  }
+
+  .metrics-grid,
+  .shortcut-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metrics-grid,
+  .shortcut-grid,
+  .insights-grid {
+    gap: 8px;
+  }
+
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-card {
+    min-height: 108px;
+    gap: 11px;
+    padding-inline: 12px;
+    text-align: left;
+  }
+
+  .shortcut-card {
+    min-height: 64px;
+    padding: 11px 12px;
+  }
+
+  .insight-card {
+    min-height: 96px;
+    padding: 11px;
+  }
+}
+
+@media (max-width: 403px) {
   .hero-card {
     grid-template-columns: minmax(0, 1fr) 118px;
     padding: 22px 14px 18px;
@@ -582,8 +637,20 @@
     gap: 7px;
   }
 
+  .metrics-grid,
+  .shortcut-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+
   .metric-card {
-    padding-inline: 4px;
+    min-height: 104px;
+    gap: 10px;
+    padding-inline: 10px;
+    text-align: left;
   }
 
   .metric-card strong {
@@ -591,22 +658,23 @@
   }
 
   .shortcut-card {
-    min-height: 166px;
-    padding-inline: 9px;
+    min-height: 12px;
+    padding: 10px 12px 10px;
   }
 
   .shortcut-card strong {
     font-size: 14px;
   }
 
-  .shortcut-card > span:not(.round-icon) {
-    font-size: 12px;
+  .shortcut-copy > span {
+    font-size: 11px;
   }
 
   .insight-card {
     grid-template-columns: 40px minmax(0, 1fr) 14px;
+    min-height: 92px;
     gap: 6px;
-    padding-inline: 7px;
+    padding: 10px;
   }
 
   .insight-card h3 {

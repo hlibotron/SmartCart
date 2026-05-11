@@ -380,7 +380,40 @@
   line-height: 1.25;
 }
 
-@media (max-width: 399px) {
+@media (min-width: 404px) and (max-width: 700px) {
+  .product-price-page h1 {
+    font-size: 37px;
+  }
+
+  .selected-product-card {
+    grid-template-columns: 70px minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .product-price-thumb {
+    width: 66px;
+    height: 66px;
+  }
+
+  .selected-product-price {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .price-chart-legend {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .store-price-row {
+    grid-template-columns: 42px minmax(0, 1fr) auto 66px 18px;
+    gap: 10px;
+    padding-inline: 12px;
+  }
+}
+
+@media (max-width: 403px) {
   .product-price-page h1 {
     font-size: 34px;
   }

@@ -120,7 +120,17 @@ svg circle {
   letter-spacing: 0;
 }
 
-@media (max-width: 399px) {
+@media (min-width: 404px) and (max-width: 700px) {
+  .content {
+    padding-inline: 18px;
+  }
+
+  h1 {
+    font-size: 40px;
+  }
+}
+
+@media (max-width: 403px) {
   .content {
     padding-inline: 14px;
   }

@@ -24,13 +24,12 @@ export function renderReceiptOverview() {
         <div class="receipt-store-info">
           <strong>${summaryData.receiptSummary.store}</strong>
           <span>${icon("calendar")}${summaryData.receiptSummary.dateTime}</span>
-          <span class="receipt-scan-status">${icon("check")}${summaryData.receiptSummary.status}</span>
         </div>
         <div class="receipt-overview-total">
-          <span class="receipt-status-badge">${icon("check")}${summaryData.receiptSummary.statusBadge}</span>
           <strong>${summaryData.receiptSummary.total}</strong>
         </div>
       </div>
+      <span class="receipt-scan-status">${icon("check")}${summaryData.receiptSummary.status}</span>
 
       <div class="receipt-summary-stats">
         ${summaryData.receiptSummary.stats
