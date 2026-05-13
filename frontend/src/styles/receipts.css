@@ -73,6 +73,62 @@
   line-height: 1;
 }
 
+.receipts-filter-btn.active {
+  background: var(--green);
+  color: #fff;
+}
+
+.receipts-filter-panel {
+  display: none;
+  gap: 14px;
+  margin: -6px 0 18px;
+  padding: 14px;
+  border: 1px solid rgba(22, 163, 74, 0.14);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--soft-shadow);
+}
+
+.receipts-filter-panel.open {
+  display: grid;
+}
+
+.receipt-filter-group {
+  display: grid;
+  gap: 9px;
+}
+
+.receipt-filter-group > span {
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.receipt-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.receipt-filter-chip {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #293044;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.receipt-filter-chip.active {
+  border-color: rgba(22, 163, 74, 0.22);
+  background: #eaf8ef;
+  color: var(--green-dark);
+}
+
 .receipts-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -133,6 +189,13 @@
   white-space: nowrap;
 }
 
+.receipts-result-count {
+  margin: -6px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .receipts-list {
   display: grid;
   gap: 12px;
@@ -164,6 +227,20 @@
   font-weight: 950;
   line-height: 1;
   letter-spacing: 0;
+}
+
+.receipt-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.receipt-logo--image {
+  padding: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: inherit;
+  text-shadow: none;
 }
 
 .receipt-logo--silpo {
@@ -244,6 +321,35 @@
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
+}
+
+.receipts-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  border: 1px dashed rgba(148, 163, 184, 0.65);
+  border-radius: 18px;
+  background: #fff;
+  color: var(--muted);
+  text-align: center;
+}
+
+.receipts-empty svg {
+  width: 32px;
+  height: 32px;
+  color: var(--green);
+}
+
+.receipts-empty strong {
+  color: #101322;
+  font-size: 17px;
+  font-weight: 850;
+}
+
+.receipts-empty span {
+  font-size: 13px;
+  font-weight: 650;
 }
 
 @media (min-width: 404px) and (max-width: 700px) {

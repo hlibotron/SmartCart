@@ -5,3 +5,14 @@ __pycache__/
 .env
 .idea/
 .vscode/
+uploads/*
+!uploads/.gitkeep
+!uploads/product-images/
+!uploads/product-images/.gitkeep
+!uploads/product-images/README.md
+!uploads/category-images/
+!uploads/category-images/.gitkeep
+!uploads/category-images/README.md
+!uploads/store-logos/
+!uploads/store-logos/.gitkeep
+!uploads/store-logos/README.md

@@ -90,6 +90,7 @@ export const categoryBreakdown = [
 ];
 
 export const topCategory = {
+  key: "dairy",
   name: "Молочні продукти",
   categoryName: "Молочні",
   subtitle: "09 квітня – 08 травня 2025",

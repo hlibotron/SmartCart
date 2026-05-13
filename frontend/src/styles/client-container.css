@@ -1,0 +1,672 @@
+@container client-shell (max-width: 403px) {
+  .content {
+    padding-inline: 14px;
+  }
+
+  h1 {
+    font-size: 38px;
+  }
+
+  .top {
+    padding-inline: 14px;
+  }
+
+  .brand > span {
+    font-size: 25px;
+  }
+
+  .hero-card {
+    grid-template-columns: minmax(0, 1fr) 118px;
+    padding: 22px 14px 18px;
+  }
+
+  .hero-copy h2 {
+    font-size: 20px;
+  }
+
+  .hero-copy p {
+    font-size: 14px;
+  }
+
+  .scan-button {
+    min-height: 43px;
+    padding-inline: 14px;
+    font-size: 14px;
+  }
+
+  .phone {
+    right: 27px;
+    width: 78px;
+  }
+
+  .bag {
+    right: 88px;
+    width: 42px;
+  }
+
+  .check-badge {
+    width: 52px;
+    height: 52px;
+  }
+
+  .metrics-grid,
+  .shortcut-grid,
+  .insights-grid {
+    gap: 7px;
+  }
+
+  .metrics-grid,
+  .shortcut-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-card {
+    min-height: 104px;
+    gap: 10px;
+    padding-inline: 10px;
+    text-align: left;
+  }
+
+  .metric-card strong {
+    font-size: 16px;
+  }
+
+  .shortcut-card {
+    min-height: 12px;
+    padding: 10px 12px;
+  }
+
+  .shortcut-card strong {
+    font-size: 14px;
+  }
+
+  .shortcut-copy > span {
+    font-size: 11px;
+  }
+
+  .insight-card {
+    grid-template-columns: 40px minmax(0, 1fr) 14px;
+    min-height: 92px;
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .insight-card h3 {
+    font-size: 12px;
+  }
+
+  .insight-card strong {
+    font-size: 18px;
+  }
+
+  .receipts-search-row {
+    gap: 8px;
+  }
+
+  .receipts-search,
+  .receipts-filter-btn {
+    height: 54px;
+    padding-inline: 12px;
+  }
+
+  .receipts-filter-btn span {
+    font-size: 14px;
+  }
+
+  .receipts-stats {
+    padding: 15px 8px;
+  }
+
+  .receipts-stat {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 6px;
+    padding-inline: 7px;
+    text-align: center;
+  }
+
+  .receipts-stat > div {
+    display: contents;
+  }
+
+  .receipts-stat .round-icon {
+    order: 2;
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  .receipts-stat .round-icon svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .receipts-stat p {
+    order: 1;
+    font-size: 11px;
+    white-space: normal;
+  }
+
+  .receipts-stat strong {
+    order: 3;
+    margin-top: 0;
+    font-size: 20px;
+  }
+
+  .receipts-stat span:not(.round-icon) {
+    order: 4;
+    margin-top: 0;
+    font-size: 11px;
+    white-space: normal;
+  }
+
+  .receipt-card {
+    grid-template-columns: 58px minmax(0, 1fr) auto 18px;
+    gap: 10px;
+    padding: 13px 12px;
+  }
+
+  .receipt-logo {
+    width: 54px;
+    height: 54px;
+  }
+
+  .receipt-meta > strong {
+    font-size: 19px;
+  }
+
+  .receipt-meta > span {
+    font-size: 13px;
+  }
+
+  .receipt-amount {
+    font-size: 24px;
+  }
+
+  .analytics-page h1 {
+    font-size: 35px;
+  }
+
+  .analytics-card {
+    padding-inline: 12px;
+  }
+
+  .analytics-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-donut {
+    width: 176px;
+  }
+
+  .analytics-legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+  }
+
+  .analytics-legend-row {
+    grid-template-columns: 10px minmax(0, 1fr);
+  }
+
+  .analytics-legend-row strong {
+    grid-column: 2;
+    font-size: 12px;
+  }
+
+  .analytics-table {
+    --analytics-table-columns: 36px minmax(0, 0.76fr) minmax(66px, 0.4fr) minmax(40px, 0.28fr) 16px;
+    --analytics-table-gap: 7px;
+    --analytics-table-row-min-height: 54px;
+    --analytics-table-icon-size: 36px;
+    --analytics-table-icon-svg-size: 20px;
+    --analytics-table-chevron-size: 16px;
+  }
+
+  .analytics-top-content {
+    grid-template-columns: 54px minmax(0, 1fr);
+  }
+
+  .analytics-sparkline {
+    grid-column: 1 / -1;
+  }
+
+  .products-page h1 {
+    font-size: 36px;
+  }
+
+  .product-stats {
+    gap: 8px;
+  }
+
+  .product-stat-card {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px 8px;
+  }
+
+  .product-stat-card .round-icon {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  .product-stat-card small,
+  .product-filter-chip {
+    font-size: 11px;
+  }
+
+  .product-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .product-filter-chip {
+    font-size: 12px;
+  }
+
+  .product-card {
+    position: relative;
+    grid-template-areas:
+      "thumb info price action"
+      "thumb info store action"
+      ". trend trend .";
+    grid-template-columns: 62px minmax(0, 1fr) minmax(70px, auto) 16px;
+    gap: 8px 9px;
+    min-height: 136px;
+    align-items: center;
+    padding: 14px 10px;
+    border-radius: 18px;
+    box-shadow: 0 12px 28px rgba(16, 19, 34, 0.075);
+  }
+
+  .product-card::before {
+    content: "";
+    position: absolute;
+    top: 18px;
+    right: 86px;
+    bottom: 44px;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .product-card:first-child,
+  .product-card:last-child {
+    border-radius: 18px;
+  }
+
+  .product-card + .product-card {
+    margin-top: 10px;
+  }
+
+  .product-card .product-thumb {
+    grid-area: thumb;
+    width: 60px;
+    height: 60px;
+    border-radius: 15px;
+  }
+
+  .product-card .product-info {
+    grid-area: info;
+    gap: 7px;
+  }
+
+  .product-card .product-action {
+    grid-area: action;
+    justify-self: end;
+    gap: 0;
+  }
+
+  .product-card .product-badge {
+    display: none;
+    width: fit-content;
+    min-height: 24px;
+    padding-inline: 9px;
+  }
+
+  .product-card .chevron {
+    width: 16px;
+    height: 16px;
+  }
+
+  .product-card .product-info strong {
+    font-size: 18px;
+  }
+
+  .product-card .product-info > span {
+    font-size: 13px;
+  }
+
+  .product-card .product-info small {
+    font-size: 12px;
+  }
+
+  .product-price {
+    display: contents;
+    width: auto;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .product-price strong {
+    grid-area: price;
+    color: var(--green);
+    font-size: 22px;
+    text-align: right;
+  }
+
+  .product-price > span {
+    grid-area: store;
+    color: #101322;
+    font-size: 14px;
+    font-weight: 850;
+    text-align: right;
+  }
+
+  .product-price small {
+    grid-area: trend;
+    width: fit-content;
+    max-width: 100%;
+    min-height: 30px;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2px;
+    padding: 0 11px;
+    border-radius: 10px;
+    background: var(--green-light);
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 850;
+  }
+
+  .product-price-page h1 {
+    font-size: 34px;
+  }
+
+  .selected-product-card {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .product-price-thumb {
+    width: 62px;
+    height: 62px;
+  }
+
+  .selected-product-price {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .price-chart-legend {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .store-price-row {
+    grid-template-columns: 40px minmax(0, 1fr) auto 62px 16px;
+    gap: 9px;
+    padding-inline: 10px;
+  }
+
+  .store-price-row > strong {
+    font-size: 17px;
+  }
+
+  .store-price-change {
+    font-size: 12px;
+  }
+
+  .receipt-summary-page h1 {
+    font-size: 35px;
+  }
+
+  .receipt-store-row {
+    grid-template-columns: 54px minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .receipt-summary-logo {
+    width: 54px;
+    height: 54px;
+  }
+
+  .receipt-overview-total {
+    grid-column: auto;
+    width: auto;
+    justify-content: center;
+    min-width: 84px;
+    padding-right: 0;
+  }
+
+  .receipt-overview-total > strong {
+    margin-left: auto;
+    font-size: 28px;
+    text-align: right;
+  }
+
+  .receipt-summary-stats > span {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 6px;
+    padding-inline: 6px;
+  }
+
+  .summary-stat-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .summary-stat-copy small {
+    font-size: 10px;
+  }
+
+  .summary-stat-copy strong {
+    font-size: 17px;
+  }
+
+  .receipt-filter-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .receipt-filter-chip {
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+
+  .receipt-items-list {
+    gap: 10px;
+  }
+
+  .receipt-item-card {
+    grid-template-areas:
+      "product product total"
+      "discount store smartcart";
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 6px;
+    min-height: 0;
+    padding: 12px 10px 10px;
+    border-radius: 18px;
+    box-shadow: 0 12px 30px rgba(16, 19, 34, 0.075);
+  }
+
+  .receipt-item-card:first-child,
+  .receipt-item-card:last-child {
+    border-radius: 18px;
+  }
+
+  .receipt-item-card + .receipt-item-card {
+    margin-top: 0;
+  }
+
+  .receipt-item-product {
+    grid-area: product;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 9px;
+    padding: 0 0 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .receipt-item-thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+  }
+
+  .receipt-item-info strong {
+    font-size: 15px;
+  }
+
+  .receipt-item-info span {
+    font-size: 11px;
+  }
+
+  .receipt-item-cell {
+    min-width: 0;
+    min-height: 68px;
+    padding: 8px 6px;
+    border-left: 0;
+    border-radius: 12px;
+    background: #f9fafb;
+  }
+
+  .receipt-item-total {
+    grid-area: total;
+    min-height: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 0 10px 8px;
+    border-bottom: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    text-align: left;
+  }
+
+  .receipt-detail-pill--discount {
+    grid-area: discount;
+    background: #fffaf6;
+  }
+
+  .receipt-detail-pill--store-cashback {
+    grid-area: store;
+    background: #f8fbf9;
+  }
+
+  .receipt-detail-pill--smartcart {
+    grid-area: smartcart;
+    border: 1px solid rgba(22, 163, 74, 0.16);
+    background: #f1fbf5;
+  }
+
+  .receipt-detail-pill--discount > span,
+  .receipt-detail-pill--store-cashback > span,
+  .receipt-detail-pill--smartcart > span {
+    display: grid;
+    grid-template-rows: 26px auto auto;
+    height: 100%;
+    min-width: 0;
+  }
+
+  .receipt-detail-pill--store-cashback > span {
+    grid-template-columns: minmax(0, auto) auto;
+    grid-template-rows: 26px auto;
+    justify-content: center;
+    column-gap: 5px;
+  }
+
+  .receipt-detail-pill--store-cashback small {
+    grid-column: 1 / -1;
+  }
+
+  .receipt-detail-pill--store-cashback strong {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .receipt-detail-pill--store-cashback em {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+  }
+
+  .receipt-item-cell strong,
+  .receipt-item-cell.receipt-detail-pill--smartcart strong {
+    font-size: 18px;
+    text-align: center;
+  }
+
+  .receipt-item-total strong {
+    font-size: 20px;
+    text-align: left;
+  }
+
+  .receipt-item-total small {
+    color: #667085;
+    font-size: 10px;
+    font-weight: 750;
+    text-align: left;
+  }
+
+  .receipt-item-cell small {
+    color: #667085;
+    font-size: 9px;
+    font-weight: 750;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+
+  .receipt-item-cell > span,
+  .receipt-detail-pill--store-cashback > span,
+  .receipt-detail-pill--smartcart > span {
+    align-items: center;
+    text-align: center;
+  }
+
+  .receipt-detail-pill--discount small,
+  .receipt-detail-pill--store-cashback small,
+  .receipt-detail-pill--smartcart small {
+    display: flex;
+    min-height: 26px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .receipt-detail-pill--discount small + strong,
+  .receipt-detail-pill--store-cashback small + strong,
+  .receipt-detail-pill--smartcart small + strong {
+    margin-top: 5px;
+  }
+
+  .receipt-detail-pill--store-cashback em {
+    margin-top: 0;
+    min-height: 20px;
+    padding-inline: 6px;
+    font-size: 10px;
+  }
+
+  .receipt-detail-pill--smartcart strong:not(.muted-value) {
+    min-height: 26px;
+    padding-inline: 6px;
+  }
+
+  .receipt-total-card {
+    grid-template-columns: 1fr;
+  }
+
+  .receipt-total-list {
+    padding: 0 0 12px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(22, 163, 74, 0.15);
+  }
+
+  .receipt-cashback-total span {
+    max-width: none;
+  }
+}

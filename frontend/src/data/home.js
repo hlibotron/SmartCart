@@ -52,6 +52,30 @@ export const shortcuts = [
   },
 ];
 
+export const insights = [
+  {
+    title: "Краща ціна на молоко — АТБ",
+    value: "₴24.90",
+    subtitle: "економія ₴1.00",
+    icon: "milk",
+    path: "/products",
+  },
+  {
+    title: "Топ категорія місяця — Молочні",
+    value: "27%",
+    subtitle: "усіх витрат",
+    icon: "milk",
+    path: "/analytics",
+  },
+  {
+    title: "Очікує кешбек",
+    value: "₴46",
+    subtitle: "з 2 чеків",
+    icon: "refresh",
+    path: "/cashback",
+  },
+];
+
 export const activities = [
   {
     title: "Додано чек із Сільпо",

@@ -6,7 +6,7 @@ import {
   selectedProduct as fallbackSelectedProduct,
   storePrices as fallbackStorePrices,
 } from "../data/productPrice.js";
-import { fetchJson, rerenderRoute } from "../shared/api.js";
+import { assetUrl, fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
 
 let priceData = {
@@ -48,12 +48,41 @@ function loadProductPrice(productName, period) {
     });
 }
 
+function thumbClassName(value) {
+  const normalized = String(value || "info").replace(/[^a-z0-9_-]/gi, "");
+  return normalized || "info";
+}
+
+function escapeAttribute(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
 function renderProductThumb() {
-  return `<span class="product-price-thumb product-price-thumb--${priceData.selectedProduct.thumb}" aria-hidden="true"><span></span></span>`;
+  const visual = priceData.selectedProduct.visual ?? {};
+  const thumb = thumbClassName(visual.thumb ?? priceData.selectedProduct.thumb);
+  const imageUrl = assetUrl(visual.url || "");
+  const fallbackMarkup = imageUrl || priceData.selectedProduct.visual ? "" : "<span></span>";
+
+  return `
+    <span class="product-price-thumb product-price-thumb--${thumb}" aria-hidden="true">
+      ${
+        imageUrl
+          ? `<img src="${escapeAttribute(imageUrl)}" alt="" loading="lazy" onerror="this.hidden = true;" />`
+          : ""
+      }
+      ${fallbackMarkup}
+    </span>
+  `;
 }
 
 function renderStoreLogo(store) {
-  return `<span class="price-store-logo price-store-logo--${store.logo}">${store.logoText}</span>`;
+  const logoUrl = assetUrl(store.logoUrl || "");
+  return logoUrl
+    ? `<span class="price-store-logo price-store-logo--image"><img src="${logoUrl}" alt="" loading="lazy" onerror="this.hidden = true;" /></span>`
+    : `<span class="price-store-logo price-store-logo--${store.logo}">${store.logoText}</span>`;
 }
 
 function renderSelectedProduct() {

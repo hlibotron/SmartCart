@@ -12,23 +12,23 @@ function getRoute(pathname = window.location.pathname) {
   return routes[stripBasePath(pathname)] ?? routes["/"];
 }
 
-function renderStatusBar() {
+function renderDemoSwitcher() {
   return `
-    <div class="status-bar" aria-hidden="true">
-      <span class="status-time">9:41</span>
-      <div class="status-icons">
-        <span class="cellular"><i></i><i></i><i></i><i></i></span>
-        ${icon("wifi", "wifi")}
-        <span class="battery"><i></i></span>
-      </div>
-    </div>
+    <nav class="demo-switcher" aria-label="Перемикання демо-режиму">
+      <a class="demo-switcher-link active interactive" href="${appHref("/")}" data-link aria-current="page">
+        Клієнт
+      </a>
+      <a class="demo-switcher-link interactive" href="${appHref("/business")}" data-link>
+        Бізнес
+      </a>
+    </nav>
   `;
 }
 
 function renderHeader(route) {
   return `
     <header class="top" aria-label="Верхня панель">
-      ${renderStatusBar()}
+      ${renderDemoSwitcher()}
       <div class="brand-row${route.backPath ? " has-back" : ""}">
         ${
           route.backPath
@@ -76,21 +76,32 @@ function renderBottomNav(activePath) {
   `;
 }
 
+function renderBusinessShell(route) {
+  return `
+    <div class="business-shell">
+      ${route.render()}
+    </div>
+  `;
+}
+
 function renderApp() {
   const route = getRoute();
 
   document.title = route.title ? `${route.title} | SmartCart` : pageTitle;
-  app.innerHTML = `
-    <div class="app-shell">
-      <div class="phone-frame">
-        ${renderHeader(route)}
-        <main class="content" id="page" tabindex="-1">
-          ${route.render()}
-        </main>
-        ${renderBottomNav(route.navPath ?? route.path)}
+  app.innerHTML =
+    route.layout === "business"
+      ? renderBusinessShell(route)
+      : `
+      <div class="app-shell">
+        <div class="phone-frame">
+          ${renderHeader(route)}
+          <main class="content" id="page" tabindex="-1">
+            ${route.render()}
+          </main>
+          ${renderBottomNav(route.navPath ?? route.path)}
+        </div>
       </div>
-    </div>
-  `;
+    `;
 
   bindGlobalInteractions();
   route.bind?.();

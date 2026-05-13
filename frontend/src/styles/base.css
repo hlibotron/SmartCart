@@ -9,6 +9,7 @@
   --bg: #fbfcfd;
   --shadow: 0 10px 28px rgba(16, 19, 34, 0.08);
   --soft-shadow: 0 8px 22px rgba(16, 19, 34, 0.06);
+  --client-shell-width: 403px;
 }
 
 * {
@@ -95,7 +96,8 @@ svg circle {
 
 .phone-frame {
   position: relative;
-  width: min(100%, 700px);
+  container: client-shell / inline-size;
+  width: min(100%, var(--client-shell-width));
   min-height: 100vh;
   overflow-x: hidden;
   background: var(--bg);

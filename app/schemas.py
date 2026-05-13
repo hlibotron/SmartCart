@@ -94,3 +94,7 @@ class ReceiptScanProcessed(BaseModel):
 class MatchCandidateResolve(BaseModel):
     product_id: int
     create_alias: bool = True
+
+
+class ProductCategoryUpdate(BaseModel):
+    categoryKey: str = Field(min_length=1, max_length=50)

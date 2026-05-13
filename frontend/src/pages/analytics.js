@@ -6,6 +6,7 @@ import {
 } from "../data/analytics.js";
 import { fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
+import { appHref } from "../shared/navigation.js";
 
 let analyticsData = {
   analyticsSummary: fallbackAnalyticsSummary,
@@ -82,15 +83,6 @@ function renderDonutChart() {
         <span>${analyticsData.analyticsSummary.totalLabel}</span>
         <span>${analyticsData.analyticsSummary.totalPeriod}</span>
       </div>
-      ${analyticsData.categoryBreakdown
-        .map(
-          (category, index) => `
-            <span class="analytics-donut-label analytics-donut-label--${index}" style="color: ${category.color};">
-              ${category.percent}%
-            </span>
-          `,
-        )
-        .join("")}
     </div>
   `;
 }
@@ -115,7 +107,12 @@ function renderLegend() {
 
 function renderCategoryRow(category) {
   return `
-    <button class="analytics-category-row interactive" type="button" data-category-name="${category.name}">
+    <button
+      class="analytics-category-row interactive"
+      type="button"
+      data-category-key="${category.key}"
+      data-category-name="${category.name}"
+    >
       <span class="analytics-category-icon" style="--category-color: ${category.color}; --category-soft: ${category.colorSoft};">
         ${icon(category.icon)}
       </span>
@@ -158,7 +155,12 @@ function renderAnalyticsCard() {
 
 function renderTopCategoryCard() {
   return `
-    <button class="analytics-top-card interactive" type="button" data-top-category="${analyticsData.topCategory.name}">
+    <button
+      class="analytics-top-card interactive"
+      type="button"
+      data-top-category="${analyticsData.topCategory.name}"
+      data-top-category-key="${analyticsData.topCategory.key || "other"}"
+    >
       <span class="analytics-top-title">
         <strong>Топ категорія місяця</strong>
         <span>✦</span>
@@ -213,11 +215,28 @@ export function bindAnalyticsPage() {
 
   document.querySelectorAll(".analytics-category-row").forEach((row) => {
     row.addEventListener("click", () => {
-      console.log("Open category analytics:", row.dataset.categoryName);
+      openCategoryAnalytics(row.dataset.categoryKey);
     });
   });
 
   document.querySelector(".analytics-top-card")?.addEventListener("click", (event) => {
-    console.log("Open top category:", event.currentTarget.dataset.topCategory);
+    openCategoryAnalytics(event.currentTarget.dataset.topCategoryKey);
   });
+}
+
+function openCategoryAnalytics(categoryKey) {
+  if (!categoryKey) {
+    return;
+  }
+
+  window.history.pushState(
+    {},
+    "",
+    appHref(
+      `/analytics-category?category=${encodeURIComponent(categoryKey)}&period=${encodeURIComponent(
+        selectedPeriod,
+      )}`,
+    ),
+  );
+  window.dispatchEvent(new Event("popstate"));
 }

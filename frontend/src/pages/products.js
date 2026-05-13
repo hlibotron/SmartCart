@@ -5,7 +5,7 @@ import {
   products as fallbackProducts,
   productStats as fallbackProductStats,
 } from "../data/products.js";
-import { fetchJson, rerenderRoute } from "../shared/api.js";
+import { assetUrl, fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
 import { appHref } from "../shared/navigation.js";
 
@@ -17,8 +17,37 @@ let pageData = {
 };
 let apiRequested = false;
 
-function renderProductThumb(type, className = "product-thumb") {
-  return `<span class="${className} product-thumb--${type}" aria-hidden="true"><span></span></span>`;
+function thumbClassName(value) {
+  const normalized = String(value || "info").replace(/[^a-z0-9_-]/gi, "");
+  return normalized || "info";
+}
+
+function escapeAttribute(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+function renderProductThumb(productOrType, className = "product-thumb") {
+  const visual = typeof productOrType === "object" ? productOrType.visual ?? {} : {};
+  const fallbackThumb = typeof productOrType === "object" ? productOrType.thumb : productOrType;
+  const thumb = thumbClassName(visual.thumb ?? fallbackThumb);
+  const imageUrl = assetUrl(visual.url || "");
+  const fallbackMarkup = imageUrl || (typeof productOrType === "object" && productOrType.visual)
+    ? ""
+    : "<span></span>";
+
+  return `
+    <span class="${className} product-thumb--${thumb}" aria-hidden="true">
+      ${
+        imageUrl
+          ? `<img src="${escapeAttribute(imageUrl)}" alt="" loading="lazy" onerror="this.hidden = true;" />`
+          : ""
+      }
+      ${fallbackMarkup}
+    </span>
+  `;
 }
 
 export function renderProductSearch() {
@@ -43,7 +72,7 @@ export function renderFrequentProducts() {
                 type="button"
                 data-product-name="${product.name}"
               >
-                ${renderProductThumb(product.thumb, "frequent-product-thumb")}
+                ${renderProductThumb(product, "frequent-product-thumb")}
                 <span>${product.name}</span>
               </button>
             `,
@@ -101,7 +130,7 @@ export function renderProductCard(product) {
 
   return `
     <button class="product-card interactive" type="button" data-product-name="${product.name}">
-      ${renderProductThumb(product.thumb)}
+      ${renderProductThumb(product)}
       <span class="product-info">
         <strong>${product.name}</strong>
         <span>${product.description}</span>

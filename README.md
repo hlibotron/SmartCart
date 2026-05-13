@@ -20,6 +20,97 @@ python -m uvicorn app.main:app --reload
 
 The backend runs on `http://127.0.0.1:8000`.
 
+### Receipt camera scan
+
+The frontend sends camera photos to `POST /api/receipt-scans/upload`. The
+backend stores the image locally, sends it to OpenAI for structured receipt
+extraction, creates the receipt in PostgreSQL, and returns `receipt_id` for the
+existing `/receipt-summary?receipt=<id>` page.
+
+Required backend environment:
+
+```bash
+OPENAI_API_KEY=sk-...
+OPENAI_RECEIPT_MODEL=gpt-4.1-mini
+RECEIPT_UPLOAD_DIR=uploads/receipt-scans
+PRODUCT_IMAGE_DIR=uploads/product-images
+CATEGORY_IMAGE_DIR=uploads/category-images
+STORE_LOGO_DIR=uploads/store-logos
+RECEIPT_MAX_IMAGE_BYTES=10485760
+```
+
+### Product photos
+
+To make receipt summaries use a real product photo, put the image into:
+
+```text
+app/uploads/product-images/
+```
+
+Supported formats are `.webp`, `.jpg`, `.jpeg`, and `.png`.
+
+Recommended names:
+
+```text
+product-{product_id}.webp
+{product_id}.webp
+normalized-product-name.webp
+```
+
+Examples:
+
+```text
+app/uploads/product-images/product-12.webp
+app/uploads/product-images/12.webp
+app/uploads/product-images/молоко-2-5.webp
+```
+
+The backend checks this folder when building receipt item `visual` data. If no
+matching photo exists, the frontend keeps using the category fallback image.
+
+### Category photos
+
+Default category photos live in:
+
+```text
+app/uploads/category-images/
+```
+
+Expected names:
+
+```text
+dairy.png
+meat.png
+vegetables.png
+fruits.png
+drinks.png
+grocery.png
+other.png
+```
+
+The backend uses these files when a specific product photo is missing.
+
+### Store logos
+
+Store logos live in:
+
+```text
+app/uploads/store-logos/
+```
+
+Recommended names:
+
+```text
+atb.png
+silpo.png
+novus.png
+auchan.png
+```
+
+You can also use the normalized store name, for example `атб.png` or
+`сільпо.png`. The backend uses these logos in receipt lists, receipt summary,
+and product price store rows.
+
 ## Frontend
 
 Frontend stack: plain `HTML/CSS/JS` with Vite as a local dev/build tool.

@@ -117,6 +117,21 @@
   display: block;
 }
 
+.frequent-product-thumb img,
+.product-thumb img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.frequent-product-thumb img:not([hidden]) + span,
+.product-thumb img:not([hidden]) + span {
+  display: none;
+}
+
 .product-thumb--milk {
   background: linear-gradient(160deg, #d7f0ff 0 28%, #50aef1 28% 100%);
 }
@@ -201,6 +216,91 @@
   border-top: 18px solid transparent;
   border-bottom: 18px solid transparent;
   border-left: 38px solid #f4b83e;
+}
+
+.product-thumb--meat {
+  background: #fff1df;
+}
+
+.product-thumb--meat span {
+  width: 36px;
+  height: 28px;
+  border-radius: 58% 42% 52% 48%;
+  background: #b45309;
+  transform: rotate(-18deg);
+}
+
+.product-thumb--carrot {
+  background: #fff6d9;
+}
+
+.product-thumb--carrot span {
+  width: 16px;
+  height: 38px;
+  border-radius: 10px 10px 15px 15px;
+  background: #f59e0b;
+  transform: rotate(35deg);
+}
+
+.product-thumb--grapes {
+  background: #f1e9ff;
+}
+
+.product-thumb--grapes span {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #7c3aed;
+  box-shadow:
+    -10px 0 0 #8b5cf6,
+    10px 0 0 #6d28d9,
+    -5px 10px 0 #7c3aed,
+    5px 10px 0 #8b5cf6,
+    0 20px 0 #6d28d9;
+  transform: translateY(-10px);
+}
+
+.product-thumb--bottle {
+  background: #e8f2ff;
+}
+
+.product-thumb--bottle span {
+  width: 20px;
+  height: 40px;
+  border-radius: 5px 5px 9px 9px;
+  background: linear-gradient(180deg, #bfdbfe 0 26%, #2563eb 26% 100%);
+}
+
+.product-thumb--jar {
+  background: #f1f2f4;
+}
+
+.product-thumb--jar span {
+  width: 29px;
+  height: 36px;
+  border-radius: 6px 6px 10px 10px;
+  background: linear-gradient(180deg, #d1d5db 0 25%, #f8fafc 25% 100%);
+  box-shadow: inset 0 0 0 2px #9ca3af;
+}
+
+.product-thumb--info {
+  background: #f1f5f9;
+}
+
+.product-thumb--info span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: #64748b;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.product-thumb--info span::before {
+  content: "i";
 }
 
 .product-stats {

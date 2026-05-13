@@ -40,6 +40,20 @@
     1px 1px 0 #fff;
 }
 
+.receipt-summary-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.receipt-summary-logo--image {
+  padding: 7px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: inherit;
+  text-shadow: none;
+}
+
 .receipt-store-info {
   min-width: 0;
 }
@@ -276,6 +290,19 @@
   display: block;
 }
 
+.receipt-item-thumb img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.receipt-item-thumb img:not([hidden]) + span {
+  display: none;
+}
+
 .receipt-item-thumb--milk {
   background: linear-gradient(160deg, #d7f0ff 0 28%, #50aef1 28% 100%);
 }
@@ -387,6 +414,185 @@
   border-top: 15px solid transparent;
   border-bottom: 15px solid transparent;
   border-left: 32px solid #f4b83e;
+}
+
+.receipt-item-thumb--eggs {
+  background: #fff7ed;
+}
+
+.receipt-item-thumb--eggs span {
+  position: relative;
+  width: 30px;
+  height: 24px;
+  border-radius: 8px;
+  background: #f4d7b2;
+  box-shadow: inset 0 -3px 0 rgba(146, 64, 14, 0.16);
+}
+
+.receipt-item-thumb--eggs span::before,
+.receipt-item-thumb--eggs span::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  width: 9px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fffaf0;
+}
+
+.receipt-item-thumb--eggs span::before {
+  left: 6px;
+}
+
+.receipt-item-thumb--eggs span::after {
+  right: 6px;
+}
+
+.receipt-item-thumb--meat {
+  background: #fff1df;
+}
+
+.receipt-item-thumb--meat span {
+  position: relative;
+  width: 29px;
+  height: 23px;
+  border-radius: 58% 42% 52% 48%;
+  background: #b45309;
+  transform: rotate(-18deg);
+}
+
+.receipt-item-thumb--meat span::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 10px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fed7aa;
+  box-shadow: inset 0 0 0 2px #fff7ed;
+}
+
+.receipt-item-thumb--carrot {
+  background: #fff6d9;
+}
+
+.receipt-item-thumb--carrot span {
+  position: relative;
+  width: 13px;
+  height: 30px;
+  border-radius: 10px 10px 13px 13px;
+  background: #f59e0b;
+  transform: rotate(35deg);
+}
+
+.receipt-item-thumb--carrot span::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: -4px;
+  width: 20px;
+  height: 12px;
+  border-radius: 50% 50% 0 0;
+  background: #16a34a;
+}
+
+.receipt-item-thumb--grapes {
+  background: #f1e9ff;
+}
+
+.receipt-item-thumb--grapes span {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #7c3aed;
+  box-shadow:
+    -8px 0 0 #8b5cf6,
+    8px 0 0 #6d28d9,
+    -4px 8px 0 #7c3aed,
+    4px 8px 0 #8b5cf6,
+    0 16px 0 #6d28d9;
+  transform: translateY(-8px);
+}
+
+.receipt-item-thumb--grapes span::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 4px;
+  width: 12px;
+  height: 7px;
+  border-radius: 50% 0 50% 0;
+  background: #16a34a;
+  transform: rotate(-20deg);
+}
+
+.receipt-item-thumb--bottle {
+  background: #e8f2ff;
+}
+
+.receipt-item-thumb--bottle span {
+  position: relative;
+  width: 17px;
+  height: 31px;
+  border-radius: 5px 5px 8px 8px;
+  background: linear-gradient(180deg, #bfdbfe 0 26%, #2563eb 26% 100%);
+}
+
+.receipt-item-thumb--bottle span::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 4px;
+  width: 9px;
+  height: 7px;
+  border-radius: 3px 3px 0 0;
+  background: #1d4ed8;
+}
+
+.receipt-item-thumb--jar {
+  background: #f1f2f4;
+}
+
+.receipt-item-thumb--jar span {
+  position: relative;
+  width: 23px;
+  height: 28px;
+  border-radius: 5px 5px 9px 9px;
+  background: linear-gradient(180deg, #d1d5db 0 25%, #f8fafc 25% 100%);
+  box-shadow: inset 0 0 0 2px #9ca3af;
+}
+
+.receipt-item-thumb--jar span::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 6px;
+  left: 5px;
+  height: 7px;
+  border-radius: 5px;
+  background: #94a3b8;
+}
+
+.receipt-item-thumb--info {
+  background: #f1f5f9;
+}
+
+.receipt-item-thumb--info span {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: 50%;
+  background: #64748b;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.receipt-item-thumb--info span::before {
+  content: "i";
 }
 
 .receipt-item-info {

@@ -1,4 +1,11 @@
 import { bindAnalyticsPage, renderAnalyticsPage } from "./pages/analytics.js";
+import {
+  bindAnalyticsCategoryPage,
+  renderAnalyticsCategoryPage,
+} from "./pages/analyticsCategory.js";
+import { bindBusinessDashboardPage, renderBusinessDashboardPage } from "./business/dashboard.js";
+import { bindBusinessGeographyPage, renderBusinessGeographyPage } from "./business/geography.js";
+import { bindBusinessForecastPage, renderBusinessForecastPage } from "./business/forecast.js";
 import { renderCashbackPage } from "./pages/cashback.js";
 import { bindHomePage, renderHomePage } from "./pages/home.js";
 import { bindProductsPage, renderProductsPage } from "./pages/products.js";
@@ -53,6 +60,14 @@ export const routes = {
     render: renderAnalyticsPage,
     bind: bindAnalyticsPage,
   },
+  "/analytics-category": {
+    path: "/analytics-category",
+    navPath: "/analytics",
+    backPath: "/analytics",
+    title: "Аналітика категорії",
+    render: renderAnalyticsCategoryPage,
+    bind: bindAnalyticsCategoryPage,
+  },
   "/cashback": {
     path: "/cashback",
     navPath: "/",
@@ -64,5 +79,33 @@ export const routes = {
     navPath: "/profile",
     title: "Профіль",
     render: renderProfilePage,
+  },
+  "/business": {
+    path: "/business",
+    layout: "business",
+    title: "Огляд бізнесу",
+    render: renderBusinessDashboardPage,
+    bind: bindBusinessDashboardPage,
+  },
+  "/business/overview": {
+    path: "/business/overview",
+    layout: "business",
+    title: "Огляд бізнесу",
+    render: renderBusinessDashboardPage,
+    bind: bindBusinessDashboardPage,
+  },
+  "/business/geography": {
+    path: "/business/geography",
+    layout: "business",
+    title: "Географія та пікові години",
+    render: renderBusinessGeographyPage,
+    bind: bindBusinessGeographyPage,
+  },
+  "/business/forecast": {
+    path: "/business/forecast",
+    layout: "business",
+    title: "Прогноз та еластичність",
+    render: renderBusinessForecastPage,
+    bind: bindBusinessForecastPage,
   },
 };

@@ -22,6 +22,7 @@
 }
 
 .product-price-thumb {
+  position: relative;
   display: grid;
   width: 70px;
   height: 70px;
@@ -30,6 +31,19 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background: linear-gradient(160deg, #d7f0ff 0 28%, #50aef1 28% 100%);
+}
+
+.product-price-thumb img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-price-thumb img:not([hidden]) + span {
+  display: none;
 }
 
 .product-price-thumb span {
@@ -258,6 +272,20 @@
   border-radius: 9px;
   font-weight: 950;
   line-height: 1;
+}
+
+.price-store-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.price-store-logo--image {
+  padding: 4px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: inherit;
+  text-shadow: none;
 }
 
 .price-store-logo--silpo {

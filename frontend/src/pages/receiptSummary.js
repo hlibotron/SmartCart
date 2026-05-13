@@ -3,8 +3,9 @@ import {
   receiptItems as fallbackReceiptItems,
   receiptSummary as fallbackReceiptSummary,
 } from "../data/receiptSummary.js";
-import { fetchJson, rerenderRoute } from "../shared/api.js";
+import { assetUrl, fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
+import { appHref } from "../shared/navigation.js";
 
 let summaryData = {
   receiptItems: fallbackReceiptItems,
@@ -13,7 +14,10 @@ let summaryData = {
 let loadedReceipt = null;
 
 function renderStoreLogo(summary) {
-  return `<span class="receipt-summary-logo receipt-summary-logo--${summary.logo}">${summary.logoText}</span>`;
+  const logoUrl = assetUrl(summary.logoUrl || "");
+  return logoUrl
+    ? `<span class="receipt-summary-logo receipt-summary-logo--image"><img src="${logoUrl}" alt="" loading="lazy" onerror="this.hidden = true;" /></span>`
+    : `<span class="receipt-summary-logo receipt-summary-logo--${summary.logo}">${summary.logoText}</span>`;
 }
 
 export function renderReceiptOverview() {
@@ -70,10 +74,32 @@ export function renderFilterChips() {
   `;
 }
 
+function thumbClassName(value) {
+  const normalized = String(value || "info").replace(/[^a-z0-9_-]/gi, "");
+  return normalized || "info";
+}
+
+function escapeAttribute(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
 function renderProductThumb(item) {
+  const visual = item.visual ?? {};
+  const thumb = thumbClassName(visual.thumb ?? item.thumbnail);
+  const imageUrl = assetUrl(visual.url || "");
+  const fallbackMarkup = imageUrl || item.visual ? "" : "<span></span>";
+
   return `
-    <span class="receipt-item-thumb receipt-item-thumb--${item.thumbnail}" aria-hidden="true">
-      <span></span>
+    <span class="receipt-item-thumb receipt-item-thumb--${thumb}" aria-hidden="true">
+      ${
+        imageUrl
+          ? `<img src="${escapeAttribute(imageUrl)}" alt="" loading="lazy" onerror="this.hidden = true;" />`
+          : ""
+      }
+      ${fallbackMarkup}
     </span>
   `;
 }
@@ -88,7 +114,7 @@ function renderValue(value, label = "") {
 
 export function renderReceiptItem(item) {
   return `
-    <button class="receipt-item-card interactive" type="button" data-item-name="${item.name}">
+    <button class="receipt-item-card interactive" type="button" data-item-name="${escapeAttribute(item.name)}">
       <div class="receipt-item-product">
         ${renderProductThumb(item)}
         <div class="receipt-item-info">
@@ -199,7 +225,17 @@ export function bindReceiptSummaryPage() {
 
   document.querySelectorAll(".receipt-item-card").forEach((card) => {
     card.addEventListener("click", () => {
-      console.log("Open receipt item:", card.dataset.itemName);
+      const productName = card.dataset.itemName;
+      if (!productName) {
+        return;
+      }
+
+      window.history.pushState(
+        {},
+        "",
+        appHref(`/product-price?product=${encodeURIComponent(productName)}`),
+      );
+      window.dispatchEvent(new Event("popstate"));
     });
   });
 

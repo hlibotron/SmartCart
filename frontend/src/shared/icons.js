@@ -20,6 +20,10 @@ const icons = {
     '<path d="M17 2v5h-5" /><path d="M20 11A8 8 0 0 0 6.2 5.5L4 7.5" /><path d="M7 22v-5h5" /><path d="M4 13a8 8 0 0 0 13.8 5.5L20 16.5" /><path d="M12 8v8" />',
   check: '<path d="m6 12.3 3.6 3.6L18.5 7" />',
   chevron: '<path d="m9 18 6-6-6-6" />',
+  chevronDown: '<path d="m6 9 6 6 6-6" />',
+  clock: '<circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />',
+  dashboard: '<rect x="4" y="4" width="6" height="6" rx="1.4" /><rect x="14" y="4" width="6" height="6" rx="1.4" /><rect x="4" y="14" width="6" height="6" rx="1.4" /><rect x="14" y="14" width="6" height="6" rx="1.4" />',
+  download: '<path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />',
   gift:
     '<path d="M20 12v8H4v-8M2 7h20v5H2zM12 22V7" /><path d="M12 7H8.4a2.4 2.4 0 1 1 2.4-2.4C10.8 7 12 7 12 7Zm0 0h3.6A2.4 2.4 0 1 0 13.2 4.6C13.2 7 12 7 12 7Z" />',
   grapes:
@@ -30,6 +34,11 @@ const icons = {
     '<path d="M8 2h8v4l-1.5 2v11a3 3 0 0 1-3 3h-1a3 3 0 0 1-3-3V8L8 6z" /><path d="M8 6h8M8 12h8" />',
   meat:
     '<path d="M8.5 18.5c-3.2-1.2-4.8-3.4-4.2-6.1.7-3.3 4.5-4.8 8.2-4.2l2.2-2.2a3 3 0 1 1 4.3 4.3l-2.2 2.2c.6 3.7-.9 7.5-4.2 8.2-1.5.3-2.9-.1-4.1-2.2Z" /><path d="M8 14h.01" />',
+  helpCircle: '<circle cx="12" cy="12" r="9" /><path d="M9.2 9a3 3 0 1 1 4.7 2.5c-1 .7-1.9 1.2-1.9 2.5" /><path d="M12 17h.01" />',
+  map:
+    '<path d="m9 18-6 3V6l6-3 6 3 6-3v15l-6 3-6-3Z" /><path d="M9 3v15M15 6v15" />',
+  mapPin:
+    '<path d="M12 21s7-5.6 7-12a7 7 0 1 0-14 0c0 6.4 7 12 7 12Z" /><circle cx="12" cy="9" r="2.3" />',
   milk:
     '<path d="M9 2h6v4l2 3v10a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3V9l2-3z" /><path d="M8 10h8M9 2h6" />',
   piggy:
@@ -41,13 +50,19 @@ const icons = {
   refresh:
     '<path d="M17 2v5h-5" /><path d="M20 11A8 8 0 0 0 6.2 5.5L4 7.5" /><path d="M7 22v-5h5" /><path d="M4 13a8 8 0 0 0 13.8 5.5L20 16.5" />',
   search: '<circle cx="11" cy="11" r="7" /><path d="m20 20-3.8-3.8" />',
+  settings:
+    '<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" /><path d="M19.4 15a1.8 1.8 0 0 0 .4 2l.1.1a2.1 2.1 0 0 1-3 3l-.1-.1a1.8 1.8 0 0 0-2-.4 1.8 1.8 0 0 0-1.1 1.7V21a2.1 2.1 0 0 1-4.2 0v-.2a1.8 1.8 0 0 0-1.1-1.7 1.8 1.8 0 0 0-2 .4l-.1.1a2.1 2.1 0 0 1-3-3l.1-.1a1.8 1.8 0 0 0 .4-2 1.8 1.8 0 0 0-1.7-1.1H2a2.1 2.1 0 0 1 0-4.2h.2a1.8 1.8 0 0 0 1.7-1.1 1.8 1.8 0 0 0-.4-2l-.1-.1a2.1 2.1 0 0 1 3-3l.1.1a1.8 1.8 0 0 0 2 .4 1.8 1.8 0 0 0 1.1-1.7V2a2.1 2.1 0 0 1 4.2 0v.2a1.8 1.8 0 0 0 1.1 1.7 1.8 1.8 0 0 0 2-.4l.1-.1a2.1 2.1 0 0 1 3 3l-.1.1a1.8 1.8 0 0 0-.4 2 1.8 1.8 0 0 0 1.7 1.1h.2a2.1 2.1 0 0 1 0 4.2h-.2a1.8 1.8 0 0 0-1.8 1.2Z" />',
   shoppingBag:
     '<path d="M6 8h12l-1 13H7z" /><path d="M9 8a3 3 0 0 1 6 0" />',
   sliders:
     '<path d="M4 6h7M15 6h5M4 12h3M11 12h9M4 18h9M17 18h3" /><circle cx="13" cy="6" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="15" cy="18" r="2" />',
+  store:
+    '<path d="M4 10h16l-1-5H5l-1 5Z" /><path d="M6 10v10h12V10" /><path d="M9 20v-6h6v6" /><path d="M4 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0" />',
   tag:
     '<path d="M20.5 13.5 13.5 20.5a2.1 2.1 0 0 1-3 0l-7-7a2.1 2.1 0 0 1 0-3L10.5 3.5H18a3 3 0 0 1 3 3V14" /><path d="M16 8h.01" />',
+  target: '<circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" />',
   trendUp: '<path d="M4 19V5" /><path d="M4 19h16" /><path d="m7 14 4-4 3 3 5-7" /><path d="M16 6h3v3" />',
+  activity: '<path d="M3 12h4l3-7 4 14 3-7h4" />',
   user: '<path d="M20 21a8 8 0 0 0-16 0" /><circle cx="12" cy="7" r="4" />',
   wallet:
     '<rect x="3" y="6" width="18" height="13" rx="3" /><path d="M17 11h4v4h-4a2 2 0 0 1 0-4ZM7 9h7" />',
