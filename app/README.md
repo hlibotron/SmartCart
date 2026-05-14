@@ -96,6 +96,10 @@ database=receipts_db
 user=postgres
 schema=ok
 
+Для демо-даних по динаміці ціни (5 чеків зі Snickers + 3 ціни з офіційних сайтів):
+
+python -m app.seed_snickers_dynamics
+
 У цьому репозиторії `DATABASE_URL` можна тримати в локальному `.env`:
 
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/receipts_db
