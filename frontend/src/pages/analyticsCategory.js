@@ -2,6 +2,7 @@ import { analyticsPeriods, categoryBreakdown } from "../data/analytics.js";
 import { assetUrl, fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
 import { appHref } from "../shared/navigation.js";
+import { formatProductText } from "../shared/text.js";
 
 const fallbackCategory = categoryBreakdown[0];
 
@@ -131,6 +132,8 @@ function renderProductThumb(product) {
 }
 
 function renderProductRow(product) {
+  const productName = formatProductText(product.name);
+
   return `
     <button
       class="analytics-category-product-row interactive"
@@ -139,7 +142,7 @@ function renderProductRow(product) {
     >
       ${renderProductThumb(product)}
       <span class="analytics-category-product-copy">
-        <strong>${product.name}</strong>
+        <strong>${productName}</strong>
         <small>${product.store} · ${product.items}</small>
       </span>
       <span class="analytics-category-product-price">

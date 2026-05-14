@@ -8,6 +8,7 @@ import {
 } from "../data/productPrice.js";
 import { assetUrl, fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
+import { formatProductText } from "../shared/text.js";
 
 let priceData = {
   priceChart: fallbackPriceChart,
@@ -17,11 +18,26 @@ let priceData = {
   storePrices: fallbackStorePrices,
 };
 let loadedProductKey = null;
+let loadedComparisonData = null;
 let selectedPricePeriod = "1m";
+let selectedPriceSource = "receipt";
+const seriesColors = ["#f97316", "#0f4c92", "#16a34a", "#ef1212", "#a678e8", "#6aa5f8"];
+const priceSourceFilters = [
+  {
+    key: "receipt",
+    label: "Мої чеки",
+    description: "ціни зі сканованих чеків",
+  },
+  {
+    key: "official",
+    label: "Офіційні сайти",
+    description: "ціни з сайтів магазинів",
+  },
+];
 
 function applyPriceData(data) {
   priceData = {
-    priceChart: data.priceChart?.xLabels ? data.priceChart : fallbackPriceChart,
+    priceChart: data.priceChart?.yTicks ? data.priceChart : fallbackPriceChart,
     priceSeries: Array.isArray(data.priceSeries) ? data.priceSeries : fallbackPriceSeries,
     productPriceInsight: data.productPriceInsight ?? fallbackProductPriceInsight,
     selectedProduct: data.selectedProduct ?? fallbackSelectedProduct,
@@ -29,18 +45,171 @@ function applyPriceData(data) {
   };
 }
 
-function loadProductPrice(productName, period) {
-  const key = `${productName}:${period}`;
+function timestampFromObservedAt(value) {
+  const [datePart = "", timePart = ""] = String(value || "").split("·").map((part) => part.trim());
+  const [day, month, year] = datePart.split(".").map(Number);
+  const [hours = 0, minutes = 0] = timePart.split(":").map(Number);
+
+  if (!day || !month || !year) {
+    return 0;
+  }
+
+  return new Date(year, month - 1, day, hours || 0, minutes || 0).getTime();
+}
+
+function chartTicksForPrices(prices) {
+  if (!prices.length) {
+    return [0, 1, 2, 3, 4, 5, 6];
+  }
+
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const chartMin = Math.max(0, Math.floor(minPrice) - 2);
+  const chartMax = Math.ceil(maxPrice) + 2;
+  const step = Math.max(1, (chartMax - chartMin) / 6);
+
+  return Array.from({ length: 7 }, (_, index) => Number((chartMin + step * index).toFixed(2)));
+}
+
+function sourceLabelFor(sourceKey) {
+  return sourceKey === "receipt" ? "чек" : "сайт";
+}
+
+function normalizePriceObservation(price, sourceKey) {
+  return {
+    ...price,
+    sourceKey,
+    sourceLabel: sourceLabelFor(sourceKey),
+    timestamp: timestampFromObservedAt(price.observedAt),
+  };
+}
+
+function emptyPriceChart() {
+  return {
+    title: "Динаміка ціни за 1 шт, ₴",
+    yTicks: [0, 1, 2, 3, 4, 5, 6],
+    xLabels: [],
+  };
+}
+
+function buildPriceDataFromComparison(data, sourceKey = selectedPriceSource) {
+  const product = data.product ?? {};
+  const officialObservations = (Array.isArray(data.priceHistory) ? data.priceHistory : [])
+    .filter((price) => Number.isFinite(Number(price.priceValue)))
+    .map((price) => normalizePriceObservation(price, "official"))
+    .sort((left, right) => left.timestamp - right.timestamp);
+  const receiptObservations = (Array.isArray(data.receiptObservedPrices)
+    ? data.receiptObservedPrices
+    : []
+  )
+    .filter((price) => Number.isFinite(Number(price.priceValue)))
+    .map((price) => normalizePriceObservation(price, "receipt"))
+    .sort((left, right) => left.timestamp - right.timestamp);
+  const latestOfficial = (Array.isArray(data.officialPrices) ? data.officialPrices : [])
+    .filter((price) => Number.isFinite(Number(price.priceValue)))
+    .map((price) => normalizePriceObservation(price, "official"));
+  const selectedObservations =
+    sourceKey === "receipt"
+      ? receiptObservations
+      : officialObservations.length
+        ? officialObservations
+        : latestOfficial;
+  const productHeaderPrice =
+    [...receiptObservations, ...officialObservations, ...latestOfficial]
+      .filter((price) => Number.isFinite(Number(price.priceValue)))
+      .sort((left, right) => right.timestamp - left.timestamp)[0] ??
+    data.bestOfficialOffer ??
+    null;
+  const prices = selectedObservations.map((price) => Number(price.priceValue));
+  const grouped = selectedObservations.reduce((accumulator, price) => {
+    const store = price.store || "Магазин";
+    accumulator.set(store, [...(accumulator.get(store) || []), price]);
+    return accumulator;
+  }, new Map());
+  const priceSeries = Array.from(grouped.entries()).map(([store, entries], index) => ({
+    store,
+    color: seriesColors[index % seriesColors.length],
+    values: entries.map((entry) => Number(entry.priceValue)),
+  }));
+  const storePrices = Array.from(grouped.entries()).map(([store, entries]) => {
+    const sortedEntries = entries.slice().sort((left, right) => left.timestamp - right.timestamp);
+    const latest = sortedEntries.at(-1);
+    const previous = sortedEntries.at(-2) ?? latest;
+    const change = Number(latest.priceValue) - Number(previous.priceValue);
+
+    return {
+      name: store,
+      logo: latest.logo,
+      logoText: latest.logoText || store.slice(0, 8),
+      logoUrl: latest.logoUrl,
+      price: latest.price,
+      priceValue: Number(latest.priceValue),
+      change: `${change > 0 ? "+" : ""}${change.toFixed(2)}`,
+      changeDirection: change <= 0 ? "down" : "up",
+      sourceLabel: latest.sourceLabel,
+      sourceKey: latest.sourceKey,
+    };
+  }).sort((left, right) => left.priceValue - right.priceValue);
+  const labels = selectedObservations
+    .map((price) => String(price.observedAt || "").split("·")[0]?.trim())
+    .filter(Boolean);
+  const xLabels = [...new Set(labels)].slice(-5);
+  const bestStore = storePrices
+    .slice()
+    .sort((left, right) => left.priceValue - right.priceValue)[0];
+
+  return {
+    priceChart: prices.length
+      ? {
+          title:
+            sourceKey === "receipt"
+              ? "Динаміка за моїми чеками, ₴"
+              : "Динаміка з офіційних сайтів, ₴",
+          yTicks: chartTicksForPrices(prices),
+          xLabels,
+        }
+      : emptyPriceChart(),
+    priceSeries,
+    productPriceInsight: {
+      title: bestStore ? `Найнижча остання ціна — ${bestStore.name}` : "Недостатньо даних",
+      text:
+        selectedObservations.length > 0
+          ? sourceKey === "receipt"
+            ? "Показано тільки ціни з ваших відсканованих чеків за обраний період."
+            : data.notice || "Показано тільки ціни з офіційних сайтів магазинів."
+          : `Для режиму “${sourceKey === "receipt" ? "Мої чеки" : "Офіційні сайти"}” ще немає цін за обраний період.`,
+    },
+    selectedProduct: {
+      name: product.name || fallbackSelectedProduct.name,
+      description: product.brand || product.category?.name || "Товар з бази",
+      price: productHeaderPrice?.price || "₴0",
+      badge: productHeaderPrice ? "Остання доступна ціна" : "Цін ще немає",
+      thumb: product.visual?.thumb || product.thumbnail || product.category?.icon || fallbackSelectedProduct.thumb,
+      visual: product.visual ?? {
+        thumb: product.thumbnail || product.category?.icon || fallbackSelectedProduct.thumb,
+      },
+    },
+    storePrices,
+  };
+}
+
+function loadProductPrice(productKey, period, { byId = false } = {}) {
+  const key = `${byId ? "id" : "name"}:${productKey}:${period}`;
   if (loadedProductKey === key) {
     return;
   }
 
   loadedProductKey = key;
-  fetchJson(
-    `/api/products/${encodeURIComponent(productName)}/prices?period=${encodeURIComponent(period)}`,
-  )
+  const path = byId
+    ? `/api/products/${encodeURIComponent(productKey)}/price-comparison?period=${encodeURIComponent(period)}`
+    : `/api/products/${encodeURIComponent(productKey)}/prices?period=${encodeURIComponent(period)}`;
+
+  fetchJson(path)
     .then((data) => {
-      applyPriceData(data);
+      if (byId) {
+        loadedComparisonData = data;
+      }
+      applyPriceData(byId ? buildPriceDataFromComparison(data, selectedPriceSource) : data);
       rerenderRoute();
     })
     .catch((error) => {
@@ -90,8 +259,8 @@ function renderSelectedProduct() {
     <section class="selected-product-card" aria-label="Обраний продукт">
       ${renderProductThumb()}
       <span class="selected-product-copy">
-        <strong>${priceData.selectedProduct.name}</strong>
-        <small>${priceData.selectedProduct.description}</small>
+        <strong>${formatProductText(priceData.selectedProduct.name)}</strong>
+        <small>${formatProductText(priceData.selectedProduct.description)}</small>
       </span>
       <span class="selected-product-price">
         <strong>${priceData.selectedProduct.price}</strong>
@@ -121,6 +290,27 @@ function renderPeriodControl() {
   `;
 }
 
+function renderPriceSourceFilters() {
+  return `
+    <div class="product-price-source-filters" aria-label="Джерело цін">
+      ${priceSourceFilters
+        .map(
+          (source) => `
+            <button
+              class="product-price-source-filter interactive${source.key === selectedPriceSource ? " active" : ""}"
+              type="button"
+              data-price-source="${source.key}"
+            >
+              <strong>${source.label}</strong>
+              <small>${source.description}</small>
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function scalePoint(value, index, values) {
   const width = 300;
   const height = 176;
@@ -137,6 +327,8 @@ function buildPolyline(values) {
 }
 
 function renderChart() {
+  const hasSeries = priceData.priceSeries.some((series) => series.values.length > 0);
+
   return `
     <section class="product-price-chart-card" aria-labelledby="price-chart-title">
       <div class="product-price-chart-heading">
@@ -144,62 +336,73 @@ function renderChart() {
         ${icon("info")}
       </div>
 
-      <div class="price-chart">
-        <div class="price-chart-y-axis">
-          ${priceData.priceChart.yTicks
-            .slice()
-            .reverse()
-            .map((tick) => `<span>${tick}</span>`)
+      ${
+        hasSeries
+          ? `
+        <div class="price-chart">
+          <div class="price-chart-y-axis">
+            ${priceData.priceChart.yTicks
+              .slice()
+              .reverse()
+              .map((tick) => `<span>${tick}</span>`)
+              .join("")}
+          </div>
+          <svg class="price-chart-svg" viewBox="0 0 340 220" aria-hidden="true">
+            <g class="price-chart-grid" transform="translate(28 18)">
+              ${priceData.priceChart.yTicks
+                .map((_, index) => `<line x1="0" x2="300" y1="${index * 29.3}" y2="${index * 29.3}" />`)
+                .join("")}
+            </g>
+            <g transform="translate(28 18)">
+              ${priceData.priceSeries
+                .map(
+                  (series) => `
+                    <polyline points="${buildPolyline(series.values)}" style="stroke: ${series.color};" />
+                    ${series.values
+                      .map((value, index) => {
+                        const [x, y] = scalePoint(value, index, series.values);
+                        return `<circle cx="${x}" cy="${y}" r="3.2" style="fill: ${series.color}; stroke: ${series.color};" />`;
+                      })
+                      .join("")}
+                  `,
+                )
+                .join("")}
+            </g>
+          </svg>
+          <div class="price-chart-x-axis">
+            ${priceData.priceChart.xLabels.map((label) => `<span>${label}</span>`).join("")}
+          </div>
+        </div>
+
+        <div class="price-chart-legend">
+          ${priceData.priceSeries
+            .map(
+              (series) => `
+                <span>
+                  <i style="background: ${series.color};"></i>
+                  ${series.store}
+                </span>
+              `,
+            )
             .join("")}
         </div>
-        <svg class="price-chart-svg" viewBox="0 0 340 220" aria-hidden="true">
-          <g class="price-chart-grid" transform="translate(28 18)">
-            ${priceData.priceChart.yTicks
-              .map((_, index) => `<line x1="0" x2="300" y1="${index * 29.3}" y2="${index * 29.3}" />`)
-              .join("")}
-          </g>
-          <g transform="translate(28 18)">
-            ${priceData.priceSeries
-              .map(
-                (series) => `
-                  <polyline points="${buildPolyline(series.values)}" style="stroke: ${series.color};" />
-                  ${series.values
-                    .map((value, index) => {
-                      const [x, y] = scalePoint(value, index, series.values);
-                      return `<circle cx="${x}" cy="${y}" r="3.2" style="fill: ${series.color}; stroke: ${series.color};" />`;
-                    })
-                    .join("")}
-                `,
-              )
-              .join("")}
-          </g>
-        </svg>
-        <div class="price-chart-x-axis">
-          ${priceData.priceChart.xLabels.map((label) => `<span>${label}</span>`).join("")}
-        </div>
-      </div>
-
-      <div class="price-chart-legend">
-        ${priceData.priceSeries
-          .map(
-            (series) => `
-              <span>
-                <i style="background: ${series.color};"></i>
-                ${series.store}
-              </span>
-            `,
-          )
-          .join("")}
-      </div>
+      `
+          : `<p class="price-chart-empty">Для вибраного джерела ще немає цін за цей період.</p>`
+      }
     </section>
   `;
 }
 
 function renderStorePriceRow(store) {
   return `
-    <button class="store-price-row interactive" type="button" data-store-name="${store.name}">
+    <button class="store-price-row interactive" type="button" data-store-name="${escapeAttribute(store.name)}">
       ${renderStoreLogo(store)}
-      <span class="store-price-name">${store.name}</span>
+      <span class="store-price-name">
+        <strong>${store.name}</strong>
+        <small class="store-price-source store-price-source--${store.sourceKey || "neutral"}">
+          ${store.sourceLabel || "ціна"}
+        </small>
+      </span>
       <strong>${store.price}</strong>
       <span class="store-price-change store-price-change--${store.changeDirection}">
         ${store.changeDirection === "up" ? "▲" : "▼"} ${store.change}
@@ -212,7 +415,11 @@ function renderStorePriceRow(store) {
 function renderStorePriceList() {
   return `
     <section class="store-price-list" aria-label="Ціни по магазинах">
-      ${priceData.storePrices.map(renderStorePriceRow).join("")}
+      ${
+        priceData.storePrices.length
+          ? priceData.storePrices.map(renderStorePriceRow).join("")
+          : `<p class="store-price-empty">Немає цін для вибраного джерела.</p>`
+      }
     </section>
   `;
 }
@@ -222,8 +429,8 @@ function renderPriceInsight() {
     <button class="product-price-insight interactive" type="button" id="productPriceInsight">
       <span class="product-price-insight-icon">${icon("trendUp")}</span>
       <span>
-        <strong>${priceData.productPriceInsight.title}</strong>
-        <small>${priceData.productPriceInsight.text}</small>
+        <strong>${formatProductText(priceData.productPriceInsight.title)}</strong>
+        <small>${formatProductText(priceData.productPriceInsight.text)}</small>
       </span>
       ${icon("chevron", "chevron")}
     </button>
@@ -236,6 +443,7 @@ export function renderProductPricePage() {
       <h1 id="product-price-title">Ціни на продукт</h1>
       ${renderSelectedProduct()}
       ${renderPeriodControl()}
+      ${renderPriceSourceFilters()}
       ${renderChart()}
       ${renderStorePriceList()}
       ${renderPriceInsight()}
@@ -244,10 +452,13 @@ export function renderProductPricePage() {
 }
 
 export function bindProductPricePage() {
-  const requestedProduct =
-    new URLSearchParams(window.location.search).get("product") ?? fallbackSelectedProduct.name;
+  const params = new URLSearchParams(window.location.search);
+  const requestedProductId = params.get("productId");
+  const requestedProduct = params.get("product") ?? fallbackSelectedProduct.name;
 
-  loadProductPrice(requestedProduct, selectedPricePeriod);
+  loadProductPrice(requestedProductId ?? requestedProduct, selectedPricePeriod, {
+    byId: Boolean(requestedProductId),
+  });
 
   document.querySelectorAll(".product-price-period").forEach((chip) => {
     chip.addEventListener("click", () => {
@@ -258,7 +469,20 @@ export function bindProductPricePage() {
       chip.classList.add("active");
       console.log("Product price period:", chip.dataset.periodKey);
       selectedPricePeriod = chip.dataset.periodKey;
-      loadProductPrice(requestedProduct, selectedPricePeriod);
+      loadProductPrice(requestedProductId ?? requestedProduct, selectedPricePeriod, {
+        byId: Boolean(requestedProductId),
+      });
+    });
+  });
+
+  document.querySelectorAll(".product-price-source-filter").forEach((filter) => {
+    filter.addEventListener("click", () => {
+      selectedPriceSource = filter.dataset.priceSource || "receipt";
+
+      if (loadedComparisonData) {
+        applyPriceData(buildPriceDataFromComparison(loadedComparisonData, selectedPriceSource));
+        rerenderRoute();
+      }
     });
   });
 

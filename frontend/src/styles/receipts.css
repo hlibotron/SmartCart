@@ -230,13 +230,14 @@
 }
 
 .receipt-logo img {
+  display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .receipt-logo--image {
-  padding: 6px;
+  padding: 0;
   border: 1px solid var(--border);
   background: #fff;
   color: inherit;

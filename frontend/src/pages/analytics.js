@@ -77,7 +77,8 @@ function buildDonutGradient() {
 
 function renderDonutChart() {
   return `
-    <div class="analytics-donut" style="--donut-gradient: ${buildDonutGradient()};">
+    <div class="analytics-donut-wrap">
+      <div class="analytics-donut" style="--donut-gradient: ${buildDonutGradient()};"></div>
       <div class="analytics-donut-center">
         <strong>${analyticsData.analyticsSummary.total}</strong>
         <span>${analyticsData.analyticsSummary.totalLabel}</span>

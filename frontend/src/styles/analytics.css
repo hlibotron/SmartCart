@@ -78,11 +78,18 @@
   margin-top: 18px;
 }
 
+.analytics-donut-wrap {
+  display: grid;
+  grid-template-columns: minmax(136px, 220px) minmax(96px, auto);
+  gap: 14px;
+  align-items: center;
+  justify-content: center;
+}
+
 .analytics-donut {
   position: relative;
   width: min(100%, 220px);
   aspect-ratio: 1;
-  margin: 0 auto;
   border-radius: 50%;
   background: conic-gradient(var(--donut-gradient));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
@@ -91,28 +98,27 @@
 .analytics-donut::before {
   content: "";
   position: absolute;
-  inset: 44px;
+  inset: 36px;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 0 0 1px rgba(229, 231, 235, 0.55);
 }
 
 .analytics-donut-center {
-  position: absolute;
-  inset: 46px;
-  z-index: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   gap: 3px;
-  text-align: center;
+  min-width: 0;
+  text-align: left;
+  padding-left: 12px;
 }
 
 .analytics-donut-center strong {
   color: #101322;
-  font-size: 22px;
-  font-weight: 900;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1;
 }
 
@@ -593,9 +599,10 @@
 
 .analytics-category-product-thumb img,
 .analytics-category-receipt-logo img {
+  display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .analytics-category-product-thumb > span {
@@ -612,7 +619,7 @@
 }
 
 .analytics-category-receipt-logo--image {
-  padding: 6px;
+  padding: 0;
   border: 1px solid var(--border);
   background: #fff;
   color: inherit;
@@ -765,6 +772,11 @@
 
   .analytics-chart-grid {
     grid-template-columns: 1fr;
+  }
+
+  .analytics-donut-wrap {
+    grid-template-columns: minmax(128px, 176px) minmax(90px, auto);
+    gap: 12px;
   }
 
   .analytics-donut {

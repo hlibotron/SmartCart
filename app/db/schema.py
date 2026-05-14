@@ -22,6 +22,14 @@ ADDITIVE_COLUMNS = {
         ("match_confidence", "NUMERIC(5, 2) DEFAULT 0"),
         ("match_status", "VARCHAR(50) DEFAULT 'unmatched'"),
     ],
+    "product_prices": [
+        ("listing_id", "INTEGER REFERENCES product_listings(id) ON DELETE SET NULL"),
+        ("price_per_unit", "NUMERIC(10, 2)"),
+        ("package_quantity", "NUMERIC(10, 3)"),
+        ("package_unit", "VARCHAR(30)"),
+        ("source_type", "VARCHAR(50) DEFAULT 'manual'"),
+        ("price_scope", "VARCHAR(50) DEFAULT 'manual'"),
+    ],
 }
 
 

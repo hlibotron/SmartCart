@@ -64,9 +64,9 @@
 
 .frequent-product-card {
   display: grid;
-  width: 84px;
+  width: 94px;
   min-height: 116px;
-  flex: 0 0 84px;
+  flex: 0 0 94px;
   place-items: center;
   align-content: center;
   gap: 8px;
@@ -400,6 +400,90 @@
   margin-top: -1px;
 }
 
+.product-card[hidden] {
+  display: none;
+}
+
+.products-empty {
+  margin: 0;
+  padding: 22px 14px;
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  border-radius: 18px;
+  background: var(--card);
+  color: #5f6675;
+  font-size: 15px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.products-pagination {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.products-pagination[hidden],
+.products-load-more[hidden] {
+  display: none;
+}
+
+.products-load-more {
+  min-height: 46px;
+  border: 1px solid rgba(22, 163, 74, 0.2);
+  border-radius: 14px;
+  background: #f7fffa;
+  color: var(--green-dark);
+  font-size: 15px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.products-page-numbers {
+  display: grid;
+  grid-template-columns: 38px repeat(5, 38px) 38px;
+  justify-content: center;
+  gap: 8px;
+}
+
+.products-page-number,
+.products-page-arrow {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--card);
+  color: #4b5563;
+  font-size: 14px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.products-page-arrow {
+  display: grid;
+  place-items: center;
+  color: #667085;
+}
+
+.products-page-arrow:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.products-page-arrow-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.products-page-arrow-icon--prev {
+  transform: rotate(180deg);
+}
+
+.products-page-number.active {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
 .product-info,
 .product-price {
   display: flex;
@@ -414,8 +498,8 @@
 .product-info strong {
   overflow: hidden;
   color: #101322;
-  font-size: 16px;
-  font-weight: 900;
+  font-size: 10px;
+  font-weight: 700;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;

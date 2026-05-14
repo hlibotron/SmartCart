@@ -111,6 +111,34 @@ You can also use the normalized store name, for example `атб.png` or
 `сільпо.png`. The backend uses these logos in receipt lists, receipt summary,
 and product price store rows.
 
+### Official store product prices
+
+Official store-site JSON exports are imported with a dedicated script. These
+prices are stored as reference online prices, not guaranteed prices for every
+physical store location in the same chain.
+
+Validate an export without touching the database:
+
+```bash
+cd smartcart
+app/.venv/bin/python -m app.import_products_json /path/to/json-or-zip-or-folder \
+  --source official-site-json \
+  --dry-run
+```
+
+Import after validation:
+
+```bash
+app/.venv/bin/python -m app.init_db
+app/.venv/bin/python -m app.import_products_json /path/to/json-or-zip-or-folder \
+  --source official-site-json
+```
+
+The importer accepts a JSON file, a folder with JSON files, or a ZIP containing
+only JSON files. It writes products, stores, product listings, aliases, and
+price history. Price comparison APIs read official prices separately from
+receipt-observed prices.
+
 ## Frontend
 
 Frontend stack: plain `HTML/CSS/JS` with Vite as a local dev/build tool.

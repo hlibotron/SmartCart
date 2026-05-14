@@ -26,6 +26,8 @@ function renderDemoSwitcher() {
 }
 
 function renderHeader(route) {
+  const profileActive = (route.navPath ?? route.path) === "/profile";
+
   return `
     <header class="top" aria-label="Верхня панель">
       ${renderDemoSwitcher()}
@@ -43,20 +45,48 @@ function renderHeader(route) {
           ${cartIcon("brand-icon")}
           <span>Smart<span>Cart</span></span>
         </a>
-        <button class="icon-button interactive" type="button" aria-label="Сповіщення">
-          ${icon("bell")}
-        </button>
+        <div class="header-actions">
+          <a
+            class="icon-button interactive${profileActive ? " active" : ""}"
+            href="${appHref("/profile")}"
+            data-link
+            data-page="Профіль"
+            aria-label="Профіль"
+            ${profileActive ? 'aria-current="page"' : ""}
+          >
+            ${icon("user")}
+          </a>
+          <button class="icon-button interactive" type="button" aria-label="Сповіщення">
+            ${icon("bell")}
+          </button>
+        </div>
       </div>
     </header>
   `;
 }
 
 function renderBottomNav(activePath) {
+  const navItems = navigationItems.filter((item) => item.path !== "/profile");
+
   return `
     <nav class="bottom-nav" aria-label="Основна навігація">
-      ${navigationItems
+      ${navItems
         .map((item) => {
           const active = item.path === activePath;
+          const scanButton =
+            item.path === "/receipts"
+              ? `
+                <button
+                  class="nav-scan-button interactive"
+                  type="button"
+                  id="bottomScanButton"
+                  aria-label="Сканувати чек"
+                >
+                  ${icon("camera")}
+                  <span>Скан</span>
+                </button>
+              `
+              : "";
 
           return `
             <a
@@ -69,9 +99,17 @@ function renderBottomNav(activePath) {
               ${icon(item.icon)}
               <span>${item.label}</span>
             </a>
+            ${scanButton}
           `;
         })
         .join("")}
+      <input
+        class="receipt-camera-input"
+        id="globalReceiptCameraInput"
+        type="file"
+        accept="image/*"
+        capture="environment"
+      />
     </nav>
   `;
 }
@@ -120,6 +158,39 @@ function navigateTo(path) {
   document.querySelector("#page")?.focus({ preventScroll: true });
 }
 
+function setGlobalScanPending(isPending) {
+  const scanButton = document.querySelector("#bottomScanButton");
+  if (!scanButton) {
+    return;
+  }
+
+  scanButton.disabled = isPending;
+  scanButton.classList.toggle("is-loading", isPending);
+}
+
+async function uploadReceiptPhoto(file) {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const response = await fetch("/api/receipt-scans/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const details = await response.json().catch(() => null);
+    throw new Error(details?.detail || `Помилка сканування: ${response.status}`);
+  }
+
+  const result = await response.json();
+  const receiptId = result.receipt_id;
+  if (!receiptId) {
+    throw new Error("Сервер не повернув ID чеку");
+  }
+
+  navigateTo(`/receipt-summary?receipt=${encodeURIComponent(receiptId)}`);
+}
+
 function bindGlobalInteractions() {
   document.querySelectorAll("[data-link]").forEach((link) => {
     link.addEventListener("click", (event) => {
@@ -144,6 +215,28 @@ function bindGlobalInteractions() {
     item.addEventListener("pointerup", () => item.classList.remove("is-pressed"));
     item.addEventListener("pointercancel", () => item.classList.remove("is-pressed"));
     item.addEventListener("pointerleave", () => item.classList.remove("is-pressed"));
+  });
+
+  const globalCameraInput = document.querySelector("#globalReceiptCameraInput");
+  document.querySelector("#bottomScanButton")?.addEventListener("click", () => {
+    globalCameraInput?.click();
+  });
+
+  globalCameraInput?.addEventListener("change", async (event) => {
+    const [file] = event.target.files ?? [];
+    if (!file) {
+      return;
+    }
+
+    setGlobalScanPending(true);
+    try {
+      await uploadReceiptPhoto(file);
+    } catch (error) {
+      console.warn(error.message);
+    } finally {
+      setGlobalScanPending(false);
+      event.target.value = "";
+    }
   });
 }
 

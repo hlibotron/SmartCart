@@ -1,11 +1,42 @@
-import { businessOverviewData } from "../data/businessMockData.js";
 import {
   bindBusinessMockLinks,
   renderBusinessKpiCards,
   renderBusinessPageShell,
 } from "./components.js";
+import { fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
 import { appHref } from "../shared/navigation.js";
+
+let businessOverviewState = null;
+let businessOverviewError = "";
+let overviewRequested = false;
+
+const loadingFilters = {
+  period: "Завантаження",
+  geography: "SmartCart DB",
+  category: "Завантаження",
+  retailer: "Завантаження",
+};
+
+const loadingStatus = {
+  updatedAt: "завантаження",
+  source: "SmartCart DB",
+};
+
+function renderBusinessDataState(title, message) {
+  return renderBusinessPageShell({
+    activeKey: "overview",
+    title: "Огляд бізнесу",
+    filters: loadingFilters,
+    status: loadingStatus,
+    children: `
+      <section class="business-overview-card" aria-labelledby="business-data-state-title">
+        <h2 id="business-data-state-title">${title}</h2>
+        <p>${message}</p>
+      </section>
+    `,
+  });
+}
 
 function renderUkraineMap() {
   return `
@@ -22,7 +53,7 @@ function renderUkraineMap() {
 }
 
 function renderHeatmap() {
-  const { weekdays, hours, heatmap } = businessOverviewData.peakHours;
+  const { weekdays, hours, heatmap } = businessOverviewState.peakHours;
 
   return `
     <div class="business-heatmap" aria-label="Теплова карта пікових годин">
@@ -67,7 +98,7 @@ function renderForecastChart() {
 }
 
 function renderSummaryCards() {
-  const { geography, peakHours, forecast } = businessOverviewData;
+  const { geography, peakHours, forecast } = businessOverviewState;
 
   return `
     <section class="business-summary-grid" aria-label="Короткі блоки бізнес-огляду">
@@ -156,7 +187,7 @@ function renderSummaryTable() {
     <section class="business-summary-table-card" aria-labelledby="business-summary-table-title">
       <h2 id="business-summary-table-title">Короткий підсумок</h2>
       <div class="business-summary-table">
-        ${businessOverviewData.summaryRows
+        ${businessOverviewState.summaryRows
           .map(
             (row) => `
               <div class="business-summary-row">
@@ -179,13 +210,21 @@ function renderSummaryTable() {
 }
 
 export function renderBusinessDashboardPage() {
+  if (businessOverviewError) {
+    return renderBusinessDataState("Не вдалося завантажити дані", businessOverviewError);
+  }
+
+  if (!businessOverviewState) {
+    return renderBusinessDataState("Завантаження даних", "Отримуємо бізнес-показники зі SmartCart DB.");
+  }
+
   return renderBusinessPageShell({
     activeKey: "overview",
     title: "Огляд бізнесу",
-    filters: businessOverviewData.filters,
-    status: businessOverviewData.status,
+    filters: businessOverviewState.filters,
+    status: businessOverviewState.status,
     children: `
-        ${renderBusinessKpiCards(businessOverviewData.kpis, "Ключові показники огляду")}
+        ${renderBusinessKpiCards(businessOverviewState.kpis, "Ключові показники огляду")}
         ${renderSummaryCards()}
         ${renderSummaryTable()}
       `,
@@ -193,5 +232,18 @@ export function renderBusinessDashboardPage() {
 }
 
 export function bindBusinessDashboardPage() {
+  if (!overviewRequested) {
+    overviewRequested = true;
+    fetchJson("/api/business/overview")
+      .then((data) => {
+        businessOverviewState = data;
+        rerenderRoute();
+      })
+      .catch((error) => {
+        businessOverviewError = error.message;
+        rerenderRoute();
+      });
+  }
+
   bindBusinessMockLinks();
 }

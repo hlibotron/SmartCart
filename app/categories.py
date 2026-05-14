@@ -66,7 +66,7 @@ PRODUCT_CATEGORIES = {
         icon="bottle",
         color="#2563eb",
         color_soft="#e8f2ff",
-        aliases=("напої", "напитки", "drinks"),
+        aliases=("напої", "напитки", "drinks", "beverage", "beverages"),
         keywords=("вода", "сік", "сок", "кава", "кофе", "чай", "нап", "кола", "лимонад"),
     ),
     "grocery": ProductCategory(

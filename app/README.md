@@ -59,13 +59,13 @@ pip install fastapi uvicorn sqlalchemy asyncpg psycopg2-binary
 ai_receipts_backend/
 │
 ├── app/
-│   ├── main.py
-│   ├── init_db.py
-│   ├── schemas.py
-│   │
-│   ├── db/
-│       ├── database.py
-│       ├── models.py
+│ ├── main.py
+│ ├── init_db.py
+│ ├── schemas.py
+│ │
+│ ├── db/
+│ ├── database.py
+│ ├── models.py
 │
 ├── venv/
 
@@ -79,9 +79,9 @@ DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/receipts_d
 engine = create_async_engine(DATABASE_URL, echo=True)
 
 AsyncSessionLocal = sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False
+bind=engine,
+class\_=AsyncSession,
+expire_on_commit=False
 )
 
 Base = declarative_base()
@@ -136,34 +136,62 @@ OCR pipeline:
 2. Backend отримує `image_url` і створює scan job:
 
 curl -X POST http://127.0.0.1:8000/api/receipt-scans \
-  -H 'Content-Type: application/json' \
-  -d '{"user":{"telegram_id":1001,"username":"demo"},"image_url":"https://example.com/receipt.jpg","provider":"manual"}'
+ -H 'Content-Type: application/json' \
+ -d '{"user":{"telegram_id":1001,"username":"demo"},"image_url":"https://example.com/receipt.jpg","provider":"manual"}'
 
 3. OCR/AI повертає структурований JSON у backend:
 
 curl -X POST http://127.0.0.1:8000/api/receipt-scans/1/parsed \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "store":"АТБ",
-    "receipt_datetime":"2026-05-11T12:35:00",
-    "currency":"UAH",
-    "items":[{
-      "raw_name":"МОЛОКО ГАЛИЧИНА 2.5% 900Г",
-      "item_name":"Молоко 2.5%",
-      "price":24.90,
-      "quantity":2,
-      "unit":"шт",
-      "discount_amount":4.00,
-      "category":"Молочні",
-      "brand":"Галичина",
-      "thumbnail":"milk",
-      "is_promotional":true
-    }]
-  }'
+ -H 'Content-Type: application/json' \
+ -d '{
+"store":"АТБ",
+"receipt_datetime":"2026-05-11T12:35:00",
+"currency":"UAH",
+"items":[{
+"raw_name":"МОЛОКО ГАЛИЧИНА 2.5% 900Г",
+"item_name":"Молоко 2.5%",
+"price":24.90,
+"quantity":2,
+"unit":"шт",
+"discount_amount":4.00,
+"category":"Молочні",
+"brand":"Галичина",
+"thumbnail":"milk",
+"is_promotional":true
+}]
+}'
 
 4. Backend match-ить `raw_name` з `products` і `product_aliases`.
 5. Якщо збіг впевнений, чек записується як matched.
 6. Якщо збіг невпевнений, створюється `product_match_candidates` для ручного підтвердження.
+
+### Trial mock receipt for analytics
+
+To add a realistic demo receipt into PostgreSQL and make it visible in the
+receipt analytics pages, run:
+
+```bash
+cd smartcart
+app/.venv/bin/python -m app.seed_mock_receipt
+```
+
+The seed is idempotent: rerunning it updates the same trial receipt instead of
+creating duplicates. It inserts a recent `Сільпо` receipt with mixed grocery,
+dairy, fruit, and drinks items, plus discounts and cashback values so the
+analytics screens have something useful to aggregate.
+
+### Demo price dynamics
+
+To seed five receipts across different stores and a price history for
+`БАТОНЧИК SNICKERS CREAMY MARS 54 Г`, run:
+
+```bash
+cd smartcart
+app/.venv/bin/python -m app.seed_demo_price_data
+```
+
+This script is also idempotent and creates official-store price history across
+three stores so the product price chart has visible dynamics.
 
 Перегляд pending-кандидатів:
 
@@ -172,9 +200,9 @@ curl -s http://127.0.0.1:8000/api/product-match-candidates
 Підтвердження кандидата і створення alias для майбутніх чеків:
 
 curl -X POST http://127.0.0.1:8000/api/product-match-candidates/1/resolve \
-  -H 'Content-Type: application/json' \
-  -d '{"product_id":12,"create_alias":true}'
-11. ML Модель та Ініціалізація БД
+<<<<<<< HEAD
+-H 'Content-Type: application/json' \
+ -d '{"product_id":12,"create_alias":true}' 11. ML Модель та Ініціалізація БД
 Оскільки проект використовує аналітику цін, перед запуском потрібно підготувати модель.
 
 Натренувати модель:
@@ -190,10 +218,16 @@ app = FastAPI()
 
 @app.get("/")
 def root():
-    return {"status": "ok"}
+<<<<<<< HEAD
+return {"status": "ok"}
 
-▶️ 13. Запуск сервера
-python -m uvicorn app.main:app --reload
+# ▶️ 13. Запуск сервера
+
+return {"status": "ok"}
+▶️ 12. Запуск сервера
+
+> > > > > > > 7932d6a (db more data, button scan, better ui)
+> > > > > > > python -m uvicorn app.main:app --reload
 
 🌐 14. Перевірка
 

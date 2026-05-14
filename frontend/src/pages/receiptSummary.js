@@ -6,6 +6,7 @@ import {
 import { assetUrl, fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
 import { appHref } from "../shared/navigation.js";
+import { formatProductText } from "../shared/text.js";
 
 let summaryData = {
   receiptItems: fallbackReceiptItems,
@@ -118,7 +119,7 @@ export function renderReceiptItem(item) {
       <div class="receipt-item-product">
         ${renderProductThumb(item)}
         <div class="receipt-item-info">
-          <strong>${item.name}</strong>
+          <strong>${formatProductText(item.name)}</strong>
           <span>${item.quantity}</span>
           <span>${item.unitPrice}</span>
         </div>

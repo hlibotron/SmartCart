@@ -15,15 +15,28 @@ export async function fetchJson(path) {
 }
 
 export function assetUrl(path) {
-  if (!path || !String(path).startsWith("/uploads/")) {
+  if (!path) {
+    return path;
+  }
+
+  const value = String(path);
+  const uploadIndex = value.indexOf("uploads/");
+  const normalizedPath =
+    value.startsWith("/uploads/")
+      ? value
+      : uploadIndex >= 0 && !/^https?:\/\//i.test(value)
+        ? `/${value.slice(uploadIndex)}`
+        : value;
+
+  if (!normalizedPath.startsWith("/uploads/")) {
     return path;
   }
 
   if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") {
-    return `${BACKEND_ORIGIN}${path}`;
+    return `${BACKEND_ORIGIN}${normalizedPath}`;
   }
 
-  return path;
+  return normalizedPath;
 }
 
 export function rerenderRoute() {

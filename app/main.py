@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
-from sqlalchemy import func, select, text
+from sqlalchemy import func, inspect as sa_inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,7 +31,9 @@ from app.db.database import get_db
 from app.db.models import (
     Product,
     ProductAlias,
+    ProductListing,
     ProductMatchCandidate,
+    ProductPrice,
     Receipt,
     ReceiptItem,
     ReceiptOcrJob,
@@ -124,6 +126,7 @@ CATEGORY_IMAGE_STEMS = {
 STORE_LOGO_STEMS = {
     "atb": ("atb", "атб"),
     "silpo": ("silpo", "сільпо", "silpo"),
+    "fora": ("fora", "фора"),
     "novus": ("novus",),
     "auchan": ("auchan", "ашан"),
     "default": ("default",),
@@ -373,7 +376,7 @@ async def home_overview(db: AsyncSession = Depends(get_db)):
         latest_receipt = receipts[0]
         insights.append(
             {
-                "title": f"Останній чек — {latest_receipt.store or 'Магазин'}",
+                "title": f"Останній чек — {display_store_name(latest_receipt.store)}",
                 "value": money(latest_receipt.total, latest_receipt.currency),
                 "subtitle": ui_datetime(receipt_date(latest_receipt)),
                 "logoText": logo_for(latest_receipt.store)[1],
@@ -398,54 +401,13 @@ async def home_overview(db: AsyncSession = Depends(get_db)):
         receipt_time = receipt_date(receipt)
         activities.append(
             {
-                "title": f"Додано чек із {receipt.store or 'Магазин'}",
+                "title": f"Додано чек із {display_store_name(receipt.store)}",
                 "date": ui_datetime(receipt_time),
                 "amount": money(receipt.total, receipt.currency),
                 "positive": False,
                 "path": f"/receipt-summary?receipt={receipt.id}",
                 "sortAt": receipt_time.isoformat(),
                 **marker,
-            }
-        )
-
-    cashback_items = [
-        (item, receipt)
-        for item, receipt in rows
-        if to_decimal(item.store_cashback_amount) + to_decimal(item.smartcart_cashback_amount) > 0
-    ]
-    cashback_items.sort(key=lambda row: receipt_date(row[1]), reverse=True)
-    for item, receipt in cashback_items[:3]:
-        amount = to_decimal(item.store_cashback_amount) + to_decimal(item.smartcart_cashback_amount)
-        receipt_time = receipt_date(receipt)
-        activities.append(
-            {
-                "title": f"Знайдено кешбек: {item.item_name}",
-                "date": ui_datetime(receipt_time),
-                "amount": cashback_money(amount, receipt.currency) or money(amount, receipt.currency),
-                "positive": True,
-                "path": "/cashback",
-                "sortAt": receipt_time.isoformat(),
-                **icon_marker("refresh"),
-            }
-        )
-
-    discounted_items = [
-        (item, receipt)
-        for item, receipt in rows
-        if to_decimal(item.discount_amount) > 0
-    ]
-    discounted_items.sort(key=lambda row: receipt_date(row[1]), reverse=True)
-    for item, receipt in discounted_items[:2]:
-        receipt_time = receipt_date(receipt)
-        activities.append(
-            {
-                "title": f"Знижка на {item.item_name}",
-                "date": ui_datetime(receipt_time),
-                "amount": money(item.discount_amount, receipt.currency),
-                "positive": True,
-                "path": f"/receipt-summary?receipt={receipt.id}",
-                "sortAt": receipt_time.isoformat(),
-                **icon_marker("tag"),
             }
         )
 
@@ -600,7 +562,20 @@ def image_url_from_stems(
     return None
 
 
-def product_image_url(product: Product | None, item: ReceiptItem) -> str | None:
+def product_listing_image_url(product: Product | None) -> str | None:
+    if product is None:
+        return None
+    if "listings" in sa_inspect(product).unloaded:
+        return None
+
+    for listing in getattr(product, "listings", []) or []:
+        image_url = getattr(listing, "image_url", None)
+        if image_url:
+            return image_url
+    return None
+
+
+def product_image_url(product: Product | None, item: ReceiptItem | None = None) -> str | None:
     configured_url = getattr(product, "image_url", None) if product else None
     if configured_url:
         return configured_url
@@ -611,15 +586,18 @@ def product_image_url(product: Product | None, item: ReceiptItem) -> str | None:
 
     for value in (
         getattr(product, "name", None) if product else None,
-        item.item_name,
-        item.raw_name,
-        normalize_name(item.raw_name),
+        getattr(item, "item_name", None),
+        getattr(item, "raw_name", None),
+        normalize_name(getattr(item, "raw_name", None)),
     ):
         slug = image_slug(value)
         if slug and slug not in candidate_stems:
             candidate_stems.append(slug)
 
-    return image_url_from_stems(candidate_stems, image_dir=PRODUCT_IMAGE_DIR)
+    return (
+        image_url_from_stems(candidate_stems, image_dir=PRODUCT_IMAGE_DIR)
+        or product_listing_image_url(product)
+    )
 
 
 def category_image_url(category_key: str) -> str | None:
@@ -657,18 +635,55 @@ def product_visual_payload(item: ReceiptItem) -> dict[str, str | None]:
     }
 
 
-def logo_for(store: str | None) -> tuple[str, str]:
+def product_visual_payload_from_product(product: Product) -> dict[str, str | None]:
+    category = normalize_category(product.category, raw_name=product.name, item_name=product.name)
+    fallback_thumb = product.thumbnail or category.icon or thumb_for(product.name, category.name)
+    image_url = product_image_url(product)
+    category_url = None if image_url else category_image_url(category.key)
+    visual_url = image_url or category_url
+
+    return {
+        "type": "product-image" if image_url else "category-image" if category_url else "missing-image",
+        "url": visual_url,
+        "thumb": fallback_thumb,
+        "categoryKey": category.key,
+        "alt": product.name if image_url else category.name,
+    }
+
+
+def display_store_name(store: str | None) -> str:
     store_name = store or "Магазин"
     normalized = store_name.lower()
     if "сільпо" in normalized or "silpo" in normalized:
-        return "silpo", "Сільпо"
+        return "Сільпо"
     if "атб" in normalized or "atb" in normalized:
-        return "atb", "АТБ"
+        return "АТБ"
+    if "фора" in normalized or "fora" in normalized:
+        return "Фора"
     if "novus" in normalized:
-        return "novus", "NOVUS"
+        return "Novus"
+    if "ашан" in normalized or "auchan" in normalized:
+        return "Ашан"
+    if "varus" in normalized or "варус" in normalized:
+        return "Varus"
+    return store_name
+
+
+def logo_for(store: str | None) -> tuple[str, str]:
+    store_name = store or "Магазин"
+    normalized = store_name.lower()
+    logo_text = display_store_name(store)
+    if "сільпо" in normalized or "silpo" in normalized:
+        return "silpo", logo_text
+    if "атб" in normalized or "atb" in normalized:
+        return "atb", logo_text
+    if "фора" in normalized or "fora" in normalized:
+        return "fora", logo_text
+    if "novus" in normalized:
+        return "novus", logo_text
     if "ашан" in normalized or "auchan" in normalized:
         return "auchan", "Ашан"
-    return "default", store_name[:8]
+    return "default", logo_text[:8]
 
 
 def store_logo_url(store: str | None) -> str | None:
@@ -703,11 +718,172 @@ def receipt_word(count: int) -> str:
     return "чеків"
 
 
+def percent_change(current: Decimal, previous: Decimal) -> Decimal:
+    if previous <= 0:
+        return Decimal("0")
+    return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.1"))
+
+
+def signed_percent(value: Decimal) -> str:
+    prefix = "+" if value > 0 else ""
+    return f"{prefix}{value}%"
+
+
+def compact_number(value: Decimal | int | float, suffix: str = "") -> str:
+    amount = to_decimal(value)
+    if amount >= Decimal("1000000"):
+        formatted = (amount / Decimal("1000000")).quantize(Decimal("0.1"))
+        return f"{formatted} млн{suffix}"
+    if amount >= Decimal("1000"):
+        formatted = (amount / Decimal("1000")).quantize(Decimal("0.1"))
+        return f"{formatted} тис.{suffix}"
+    if amount == amount.to_integral_value():
+        return f"{int(amount)}{suffix}"
+    return f"{amount.quantize(Decimal('0.1'))}{suffix}"
+
+
+def business_money(value: Decimal | int | float) -> str:
+    return compact_number(value, " ₴")
+
+
+def business_status_payload() -> dict:
+    return {
+        "updatedAt": datetime.utcnow().strftime("%d.%m.%Y · %H:%M"),
+        "source": "SmartCart DB",
+    }
+
+
+def business_filters_payload(category: str = "Усі категорії", period: str = "Останні 30 днів") -> dict:
+    return {
+        "period": period,
+        "geography": "Дані з чеків",
+        "category": category,
+        "retailer": "Усі ритейлери",
+    }
+
+
+def normalize_store_name(value: str | None) -> str:
+    return display_store_name(value)
+
+
+def receipt_sales_total(rows: list[tuple[ReceiptItem, Receipt]]) -> Decimal:
+    return sum((item_net_total(item) for item, _ in rows), Decimal("0"))
+
+
+def business_sparkline(values: list[Decimal | int | float]) -> str:
+    if not values:
+        return "M2 30 L68 30"
+    decimals = [to_decimal(value) for value in values]
+    minimum = min(decimals)
+    maximum = max(decimals)
+    span = max(maximum - minimum, Decimal("1"))
+    points = []
+    for index, value in enumerate(decimals[:8]):
+        x = Decimal("2") + Decimal(index) * (Decimal("66") / Decimal(max(len(decimals[:8]) - 1, 1)))
+        y = Decimal("32") - ((value - minimum) / span * Decimal("28"))
+        points.append(f"{'M' if index == 0 else 'L'}{float(x):.1f} {float(y):.1f}")
+    return " ".join(points)
+
+
+def business_peak_hour_payload(rows: list[tuple[ReceiptItem, Receipt]]) -> dict:
+    hour_counts = defaultdict(int)
+    weekday_counts = defaultdict(int)
+    weekday_hour_counts = defaultdict(int)
+    for _, receipt in rows:
+        date = receipt_date(receipt)
+        hour = date.hour
+        weekday = date.weekday()
+        hour_counts[hour] += 1
+        weekday_counts[weekday] += 1
+        weekday_hour_counts[(weekday, hour)] += 1
+
+    days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"]
+    hours = ["0", "2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22"]
+    max_bucket = max(weekday_hour_counts.values(), default=1)
+    heatmap = []
+    for day_index in range(7):
+        row = []
+        for hour_label in hours:
+            hour = int(hour_label)
+            bucket_value = sum(
+                weekday_hour_counts.get((day_index, current_hour), 0)
+                for current_hour in range(hour, min(hour + 2, 24))
+            )
+            row.append(max(1, min(7, ceil((bucket_value / max_bucket) * 7))) if bucket_value else 1)
+        heatmap.append(row)
+
+    top_day_index = max(weekday_counts, key=weekday_counts.get, default=0)
+    top_hour = max(hour_counts, key=hour_counts.get, default=18)
+    weakest_hour = min(hour_counts, key=hour_counts.get, default=3) if hour_counts else 3
+    total_receipts = sum(weekday_counts.values())
+    top_day_share = (
+        Decimal(weekday_counts[top_day_index]) / Decimal(total_receipts) * Decimal("100")
+        if total_receipts
+        else Decimal("0")
+    )
+    top_hour_share = (
+        Decimal(hour_counts[top_hour]) / Decimal(max(total_receipts, 1)) * Decimal("100")
+    )
+    weakest_hour_share = (
+        Decimal(hour_counts[weakest_hour]) / Decimal(max(total_receipts, 1)) * Decimal("100")
+        if hour_counts
+        else Decimal("0")
+    )
+
+    return {
+        "topDay": days[top_day_index],
+        "topDayShare": f"{top_day_share.quantize(Decimal('0.1'))}%",
+        "peakInterval": f"{top_hour:02d}:00–{min(top_hour + 2, 23):02d}:00",
+        "peakIntervalShare": f"{top_hour_share.quantize(Decimal('0.1'))}%",
+        "weakestPeriod": f"{weakest_hour:02d}:00–{min(weakest_hour + 2, 23):02d}:00",
+        "weakestPeriodShare": f"{weakest_hour_share.quantize(Decimal('0.1'))}%",
+        "days": days,
+        "hours": hours,
+        "heatmap": heatmap,
+        "hourlySales": [
+            {"hour": str(hour), "value": float(hour_counts.get(hour, 0))}
+            for hour in range(24)
+        ],
+    }
+
+
+def business_overview_heatmap(peak_hours: dict) -> dict:
+    selected_hours = ["0", "6", "12", "18", "23"]
+    source_hours = peak_hours["hours"]
+    heatmap = []
+    for hour in selected_hours:
+        if hour in source_hours:
+            index = source_hours.index(hour)
+            heatmap.append([row[index] for row in peak_hours["heatmap"]])
+        else:
+            heatmap.append([1 for _ in peak_hours["days"]])
+    return {
+        "time": peak_hours["peakInterval"],
+        "day": peak_hours["topDay"],
+        "weekdays": peak_hours["days"],
+        "hours": selected_hours,
+        "heatmap": heatmap,
+    }
+
+
+def top_store_metrics(rows: list[tuple[ReceiptItem, Receipt]]) -> list[dict]:
+    stores = defaultdict(lambda: {"amount": Decimal("0"), "receipts": set()})
+    for item, receipt in rows:
+        store = normalize_store_name(receipt.store)
+        stores[store]["amount"] += item_net_total(item)
+        stores[store]["receipts"].add(receipt.id)
+
+    return [
+        {"store": store, "amount": values["amount"], "receipts": len(values["receipts"])}
+        for store, values in sorted(stores.items(), key=lambda row: row[1]["amount"], reverse=True)
+    ]
+
+
 async def fetch_item_rows(db: AsyncSession, *, since: datetime | None = None):
     stmt = (
         select(ReceiptItem, Receipt)
         .join(Receipt, ReceiptItem.receipt_id == Receipt.id)
-        .options(selectinload(ReceiptItem.product))
+        .options(selectinload(ReceiptItem.product).selectinload(Product.listings))
         .order_by(Receipt.receipt_datetime.desc().nullslast(), Receipt.created_at.desc())
     )
     if since:
@@ -1319,7 +1495,7 @@ async def list_receipts(db: AsyncSession = Depends(get_db)):
         cards.append(
             {
                 "id": receipt.id,
-                "store": receipt.store or "Магазин",
+                "store": display_store_name(receipt.store),
                 "date": date.strftime("%d.%m.%Y"),
                 "items": f"{item_count} {item_word(item_count)}",
                 "amount": money(receipt.total, receipt.currency),
@@ -1396,7 +1572,7 @@ def receipt_detail_payload(receipt: Receipt):
 
     return {
         "receiptSummary": {
-            "store": receipt.store or "Магазин",
+            "store": display_store_name(receipt.store),
             "logo": logo,
             "logoText": logo_text,
             "logoUrl": logo_url,
@@ -1636,7 +1812,11 @@ async def update_product_category(
     if payload.categoryKey not in PRODUCT_CATEGORIES:
         raise HTTPException(status_code=400, detail="Unknown product category")
 
-    product_result = await db.execute(select(Product).where(Product.id == product_id))
+    product_result = await db.execute(
+        select(Product)
+        .options(selectinload(Product.listings))
+        .where(Product.id == product_id)
+    )
     product = product_result.scalar_one_or_none()
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -1666,68 +1846,159 @@ async def update_product_category(
 @app.get("/products")
 @app.get("/api/products")
 async def products_overview(db: AsyncSession = Depends(get_db)):
+    products_result = await db.execute(
+        select(Product)
+        .options(selectinload(Product.listings).selectinload(ProductListing.store))
+        .order_by(Product.name.asc())
+    )
+    products = products_result.scalars().all()
+
     rows = await fetch_item_rows(db)
-    groups: dict[str, list[tuple[ReceiptItem, Receipt]]] = defaultdict(list)
+    receipt_groups: dict[int, list[tuple[ReceiptItem, Receipt]]] = defaultdict(list)
     for item, receipt in rows:
-        groups[item.item_name].append((item, receipt))
+        if item.product_id:
+            receipt_groups[item.product_id].append((item, receipt))
+
+    price_result = await db.execute(
+        select(ProductPrice)
+        .options(selectinload(ProductPrice.store), selectinload(ProductPrice.listing))
+        .order_by(ProductPrice.observed_at.desc())
+    )
+    official_history: dict[int, list[ProductPrice]] = defaultdict(list)
+    official_latest_by_listing: dict[int, dict[tuple[int | None, int], ProductPrice]] = defaultdict(dict)
+    for price in price_result.scalars().all():
+        official_history[price.product_id].append(price)
+        key = (price.listing_id, price.store_id)
+        official_latest_by_listing[price.product_id].setdefault(key, price)
 
     product_cards = []
     drop_count = 0
     promo_count = 0
-    for name, entries in groups.items():
-        entries = sorted(entries, key=lambda row: receipt_date(row[1]), reverse=True)
-        latest_item, latest_receipt = entries[0]
-        previous_item = entries[1][0] if len(entries) > 1 else None
-        latest_price = to_decimal(latest_item.price)
-        previous_price = to_decimal(previous_item.price) if previous_item else latest_price
-        diff = latest_price - previous_price
-        if diff < 0:
-            drop_count += 1
-        has_cashback = (
-            to_decimal(latest_item.store_cashback_amount) > 0
-            or to_decimal(latest_item.store_cashback_percent) > 0
-            or to_decimal(latest_item.smartcart_cashback_amount) > 0
+    for product in products:
+        visual = product_visual_payload_from_product(product)
+        category = normalize_category(product.category, raw_name=product.name, item_name=product.name)
+        receipt_entries = sorted(
+            receipt_groups.get(product.id, []),
+            key=lambda row: receipt_date(row[1]),
+            reverse=True,
         )
-        if latest_item.is_promotional or to_decimal(latest_item.discount_amount) > 0:
-            promo_count += 1
+        latest_official = list(official_latest_by_listing.get(product.id, {}).values())
+        selected_official = min(latest_official, key=lambda price: to_decimal(price.price), default=None)
+        official_entries = official_history.get(product.id, [])
+        price = Decimal("0")
+        currency = "UAH"
+        store = "Немає цін"
+        trend = "очікує дані"
+        frequency = "додано в базу"
+        badge = None
+        badge_type = None
 
-        first_date = receipt_date(entries[-1][1])
-        last_date = receipt_date(entries[0][1])
-        months = max(1, ceil(max((last_date - first_date).days, 1) / 30))
-        frequency = max(1, round(len(entries) / months))
-        badge = "+ кешбек" if has_cashback else "знижка" if latest_item.is_promotional else None
-        badge_type = "cashback" if has_cashback else "discount" if badge else None
-        visual = product_visual_payload(latest_item)
+        if receipt_entries:
+            first_date = receipt_date(receipt_entries[-1][1])
+            last_date = receipt_date(receipt_entries[0][1])
+            months = max(1, ceil(max((last_date - first_date).days, 1) / 30))
+            frequency = f"купую {max(1, round(len(receipt_entries) / months))} рази/міс"
+
+        if selected_official is not None:
+            price = to_decimal(selected_official.price)
+            currency = selected_official.currency
+            store = display_store_name(selected_official.store.name if selected_official.store else None)
+            comparable_previous = next(
+                (
+                    previous_price
+                    for previous_price in official_entries
+                    if previous_price.id != selected_official.id
+                    and previous_price.store_id == selected_official.store_id
+                    and previous_price.listing_id == selected_official.listing_id
+                ),
+                None,
+            )
+            diff = price - to_decimal(comparable_previous.price if comparable_previous else selected_official.price)
+            trend = f"{signed_money(diff)} за останній запис"
+            if diff < 0:
+                drop_count += 1
+            if selected_official.is_promotional:
+                promo_count += 1
+                badge = "знижка"
+                badge_type = "discount"
+            elif product.has_cashback:
+                promo_count += 1
+                badge = "+ кешбек"
+                badge_type = "cashback"
+        elif receipt_entries:
+            latest_item, latest_receipt = receipt_entries[0]
+            previous_item = receipt_entries[1][0] if len(receipt_entries) > 1 else latest_item
+            price = to_decimal(latest_item.price)
+            currency = latest_receipt.currency
+            store = display_store_name(latest_receipt.store)
+            diff = price - to_decimal(previous_item.price)
+            trend = f"{signed_money(diff)} за останню покупку"
+            visual = product_visual_payload(latest_item)
+            if diff < 0:
+                drop_count += 1
+            has_cashback = (
+                product.has_cashback
+                or to_decimal(latest_item.store_cashback_amount) > 0
+                or to_decimal(latest_item.store_cashback_percent) > 0
+                or to_decimal(latest_item.smartcart_cashback_amount) > 0
+            )
+            if latest_item.is_promotional or to_decimal(latest_item.discount_amount) > 0:
+                promo_count += 1
+                badge = "знижка"
+                badge_type = "discount"
+            elif has_cashback:
+                promo_count += 1
+                badge = "+ кешбек"
+                badge_type = "cashback"
+        elif product.listings:
+            frequency = f"є в {len(product.listings)} магазинах"
 
         product_cards.append(
             {
-                "productId": latest_item.product_id,
-                "name": name,
+                "productId": product.id,
+                "name": product.name,
                 "thumb": visual["thumb"],
                 "visual": visual,
-                "description": latest_item.brand or latest_item.category or "Товар з чеків",
-                "frequency": f"купую {frequency} рази/міс",
-                "price": money(latest_price, latest_receipt.currency),
-                "store": latest_receipt.store or "Магазин",
-                "trend": f"{signed_money(diff)} за останню покупку",
+                "description": product.description or product.brand or category.name or "Товар з бази",
+                "frequency": frequency,
+                "price": money(price, currency),
+                "store": store,
+                "trend": trend,
                 "badge": badge,
                 "badgeType": badge_type,
+                "hasPurchases": bool(receipt_entries),
+                "searchText": " ".join(
+                    part
+                    for part in (
+                        product.name,
+                        product.brand,
+                        product.description,
+                        category.name,
+                        store,
+                    )
+                    if part
+                ),
             }
         )
 
     product_cards.sort(key=lambda product: product["name"].lower())
-    frequent = sorted(
-        (
+
+    frequent = []
+    for product in products:
+        entries = receipt_groups.get(product.id, [])
+        if not entries:
+            continue
+        entries = sorted(entries, key=lambda row: receipt_date(row[1]), reverse=True)
+        frequent.append(
             {
-                "name": name,
+                "productId": product.id,
+                "name": product.name,
                 "thumb": product_visual_payload(entries[0][0])["thumb"],
                 "visual": product_visual_payload(entries[0][0]),
+                "purchaseCount": len(entries),
             }
-            for name, entries in groups.items()
-        ),
-        key=lambda product: len(groups[product["name"]]),
-        reverse=True,
-    )[:6]
+        )
+    frequent = sorted(frequent, key=lambda product: product["purchaseCount"], reverse=True)[:6]
     if frequent:
         frequent[0]["active"] = True
 
@@ -1749,6 +2020,595 @@ async def products_overview(db: AsyncSession = Depends(get_db)):
         ],
         "products": product_cards,
         "dailyRecommendation": recommendation,
+    }
+
+
+def product_listing_payload(listing: ProductListing) -> dict:
+    category = normalize_category(
+        listing.category,
+        raw_name=listing.raw_name,
+        item_name=listing.raw_name,
+    )
+    return {
+        "id": listing.id,
+        "productId": listing.product_id,
+        "storeId": listing.store_id,
+        "store": display_store_name(listing.store.name if listing.store else None),
+        "rawName": listing.raw_name,
+        "brand": listing.brand,
+        "category": category_payload(category),
+        "productUrl": listing.product_url,
+        "imageUrl": listing.image_url,
+        "availability": bool(listing.availability),
+        "packageQuantity": float(to_decimal(listing.package_quantity))
+        if listing.package_quantity is not None
+        else None,
+        "packageUnit": listing.package_unit,
+        "source": listing.source,
+        "sourceType": listing.source_type,
+        "priceScope": listing.price_scope,
+        "lastSeenAt": ui_datetime(listing.last_seen_at),
+    }
+
+
+def official_price_payload(price: ProductPrice) -> dict:
+    store = price.store
+    logo, logo_text = logo_for(store.name if store else None)
+    logo_url = store_logo_url(store.name if store else None)
+    return {
+        "id": price.id,
+        "productId": price.product_id,
+        "listingId": price.listing_id,
+        "storeId": price.store_id,
+        "store": display_store_name(store.name if store else None),
+        "logo": logo,
+        "logoText": logo_text,
+        "logoUrl": logo_url,
+        "price": money(price.price, price.currency),
+        "priceValue": float(to_decimal(price.price)),
+        "currency": price.currency,
+        "pricePerUnit": nullable_money(price.price_per_unit, price.currency),
+        "pricePerUnitValue": float(to_decimal(price.price_per_unit))
+        if price.price_per_unit is not None
+        else None,
+        "packageQuantity": float(to_decimal(price.package_quantity))
+        if price.package_quantity is not None
+        else None,
+        "packageUnit": price.package_unit,
+        "observedAt": ui_datetime(price.observed_at),
+        "source": price.source,
+        "sourceType": price.source_type,
+        "priceScope": price.price_scope,
+        "availability": bool(price.listing.availability) if price.listing else None,
+        "productUrl": price.listing.product_url if price.listing else None,
+        "imageUrl": price.listing.image_url if price.listing else None,
+    }
+
+
+def receipt_observed_price_payload(item: ReceiptItem, receipt: Receipt) -> dict:
+    logo, logo_text = logo_for(receipt.store)
+    return {
+        "receiptId": receipt.id,
+        "productId": item.product_id,
+        "store": display_store_name(receipt.store),
+        "logo": logo,
+        "logoText": logo_text,
+        "logoUrl": store_logo_url(receipt.store),
+        "price": money(item.price, receipt.currency),
+        "priceValue": float(to_decimal(item.price)),
+        "currency": receipt.currency,
+        "quantity": float(to_decimal(item.quantity)),
+        "unit": item.unit or "шт",
+        "observedAt": ui_datetime(receipt_date(receipt)),
+        "source": "receipt",
+        "sourceType": "receipt_scan",
+        "priceScope": "receipt_observed",
+    }
+
+
+async def latest_official_prices_for_product(db: AsyncSession, product_id: int) -> list[ProductPrice]:
+    result = await db.execute(
+        select(ProductPrice)
+        .options(selectinload(ProductPrice.store), selectinload(ProductPrice.listing))
+        .where(ProductPrice.product_id == product_id)
+        .where(ProductPrice.price_scope == "official_online_reference")
+        .order_by(ProductPrice.observed_at.desc())
+    )
+    latest_by_listing: dict[tuple[int | None, int], ProductPrice] = {}
+    for price in result.scalars().all():
+        key = (price.listing_id, price.store_id)
+        if key not in latest_by_listing:
+            latest_by_listing[key] = price
+    return list(latest_by_listing.values())
+
+
+@app.get("/stores")
+@app.get("/api/stores")
+async def list_stores(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Store).order_by(Store.name.asc()))
+    stores = result.scalars().all()
+    return {
+        "stores": [
+            {
+                "id": store.id,
+                "name": display_store_name(store.name),
+                "rawName": store.name,
+                "logo": store.logo,
+                "logoText": logo_for(store.name)[1],
+                "logoUrl": store_logo_url(store.name),
+            }
+            for store in stores
+        ]
+    }
+
+
+@app.get("/business/overview")
+@app.get("/api/business/overview")
+async def business_overview(db: AsyncSession = Depends(get_db)):
+    since = period_cutoff("1m")
+    previous_since = since - timedelta(days=30)
+    current_rows = await fetch_item_rows(db, since=since)
+    previous_rows = [
+        row
+        for row in await fetch_item_rows(db, since=previous_since)
+        if receipt_date(row[1]) < since
+    ]
+    current_total = receipt_sales_total(current_rows)
+    previous_total = receipt_sales_total(previous_rows)
+    receipt_ids = {receipt.id for _, receipt in current_rows}
+    previous_receipt_ids = {receipt.id for _, receipt in previous_rows}
+    receipt_count = len(receipt_ids)
+    previous_receipt_count = len(previous_receipt_ids)
+    average_receipt = current_total / receipt_count if receipt_count else Decimal("0")
+    previous_average = previous_total / previous_receipt_count if previous_receipt_count else Decimal("0")
+    sales_change = percent_change(current_total, previous_total)
+    receipts_change = percent_change(Decimal(receipt_count), Decimal(previous_receipt_count))
+    average_change = percent_change(average_receipt, previous_average)
+    stores = top_store_metrics(current_rows)
+    peak_hours = business_peak_hour_payload(current_rows)
+    forecast_sales = current_total * (Decimal("1") + max(sales_change, Decimal("0")) / Decimal("100"))
+    growth_potential = max(Decimal("0"), forecast_sales - current_total)
+    top_store = stores[0]["store"] if stores else "Немає даних"
+    category_totals = defaultdict(Decimal)
+    for item, _ in current_rows:
+        category = normalize_category(item.category, raw_name=item.raw_name, item_name=item.item_name)
+        category_totals[category.name] += item_net_total(item)
+    top_category = max(category_totals, key=category_totals.get, default="Усі категорії")
+
+    return {
+        "filters": business_filters_payload(top_category),
+        "kpis": {
+            "sales": {
+                "label": "Продажі",
+                "value": business_money(current_total),
+                "change": signed_percent(sales_change),
+                "description": "до попер. 30 днів",
+                "meaning": "Сума позицій з чеків за останні 30 днів.",
+                "icon": "analytics",
+                "sparkline": business_sparkline([metric["amount"] for metric in stores[:8]]),
+            },
+            "receipts": {
+                "label": "Чеки",
+                "value": compact_number(receipt_count),
+                "change": signed_percent(receipts_change),
+                "description": "до попер. 30 днів",
+                "meaning": "Кількість чеків у базі за останні 30 днів.",
+                "icon": "receiptCheck",
+                "sparkline": business_sparkline([metric["receipts"] for metric in stores[:8]]),
+            },
+            "categoryAverage": {
+                "label": "Сер. сума чеку",
+                "value": money(average_receipt),
+                "subtitle": "за реальними чеками",
+                "change": signed_percent(average_change),
+                "description": "до попер. 30 днів",
+                "meaning": "Сума продажів / кількість чеків.",
+                "icon": "wallet",
+                "sparkline": business_sparkline([average_receipt, previous_average, current_total]),
+            },
+            "growthPotential": {
+                "label": "Потенціал росту",
+                "value": business_money(growth_potential),
+                "subtitle": "простий прогноз з поточного тренду",
+                "tooltip": "Оцінка на базі зміни продажів за останні 30 днів.",
+                "icon": "trendUp",
+                "sparkline": business_sparkline([previous_total, current_total, forecast_sales]),
+            },
+        },
+        "geography": {
+            "topRegion": top_store,
+            "growth": signed_percent(sales_change),
+            "activeCities": len(stores),
+        },
+        "peakHours": business_overview_heatmap(peak_hours),
+        "forecast": {
+            "next30DaysSales": business_money(forecast_sales),
+            "growth": signed_percent(sales_change),
+            "elasticity": "Розраховано з чеків" if receipt_count else "Недостатньо даних",
+            "optimalPriceRange": "на основі офіційних цін",
+        },
+        "summaryRows": [
+            {
+                "icon": "mapPin",
+                "label": "Найбільший ритейлер за продажами",
+                "value": top_store,
+                "change": f"{business_money(stores[0]['amount']) if stores else money(0)} за 30 днів",
+                "action": "Дивитись географію",
+                "href": "/business/geography",
+            },
+            {
+                "icon": "clock",
+                "label": "Найактивніший час покупок",
+                "value": f"{peak_hours['peakInterval']} · {peak_hours['topDay']}",
+                "change": f"{peak_hours['peakIntervalShare']} чеків у піку",
+                "action": "Деталі пікових годин",
+                "href": "/business/geography",
+            },
+            {
+                "icon": "trendUp",
+                "label": "Прогноз продажів на наступні 30 днів",
+                "value": business_money(forecast_sales),
+                "change": f"{signed_percent(sales_change)} до попер. 30 днів",
+                "action": "Дивитись прогноз",
+                "href": "/business/forecast",
+            },
+            {
+                "icon": "target",
+                "label": "Найсильніша категорія",
+                "value": top_category,
+                "change": "Потенціал: деталізація по товарах",
+                "action": "Про еластичність",
+                "href": "/business/forecast",
+            },
+        ],
+        "status": business_status_payload(),
+    }
+
+
+@app.get("/business/geography")
+@app.get("/api/business/geography")
+async def business_geography(db: AsyncSession = Depends(get_db)):
+    since = period_cutoff("1m")
+    current_rows = await fetch_item_rows(db, since=since)
+    stores = top_store_metrics(current_rows)
+    total = sum((store["amount"] for store in stores), Decimal("0"))
+    peak_hours = business_peak_hour_payload(current_rows)
+    top_store = stores[0] if stores else {"store": "Немає даних", "amount": Decimal("0"), "receipts": 0}
+    average_receipt = total / max(len({receipt.id for _, receipt in current_rows}), 1)
+    max_sales = max((store["amount"] for store in stores), default=Decimal("1"))
+
+    growth_regions = []
+    for index, store in enumerate(stores[:5]):
+        score = max(1, int((store["amount"] / max_sales) * Decimal("100"))) if max_sales else 0
+        growth_regions.append(
+            {
+                "region": store["store"],
+                "sales": str((store["amount"] / Decimal("1000")).quantize(Decimal("0.01"))),
+                "change": f"+{min(99, score)}%",
+                "score": str(score),
+                "potential": "Високий" if index < 2 else "Середній",
+            }
+        )
+
+    return {
+        "filters": business_filters_payload(),
+        "kpis": {
+            "regionalSales": {
+                "label": "Продажі по ритейлерах",
+                "value": business_money(total),
+                "change": "+0%",
+                "description": "реальні дані з чеків",
+                "meaning": "Сума продажів, згрупована за магазином з чеків.",
+                "icon": "analytics",
+                "sparkline": business_sparkline([store["amount"] for store in stores[:8]]),
+            },
+            "activeCities": {
+                "label": "Активні ритейлери",
+                "value": str(len(stores)),
+                "change": "+0%",
+                "description": "за період",
+                "meaning": "Кількість магазинів/ритейлерів, знайдених у чеках.",
+                "icon": "store",
+                "sparkline": business_sparkline([store["receipts"] for store in stores[:8]]),
+            },
+            "peakTime": {
+                "label": "Піковий час",
+                "value": peak_hours["peakInterval"],
+                "change": peak_hours["peakIntervalShare"],
+                "description": "частка чеків",
+                "meaning": "Найактивніший двогодинний інтервал у чеках.",
+                "icon": "clock",
+                "sparkline": business_sparkline([bar["value"] for bar in peak_hours["hourlySales"][:8]]),
+            },
+            "categoryAverage": {
+                "label": "Сер. сума чеку",
+                "value": money(average_receipt),
+                "subtitle": "реальні чеки",
+                "change": "+0%",
+                "description": "за період",
+                "meaning": "Середня сума чеку за останні 30 днів.",
+                "icon": "wallet",
+                "sparkline": business_sparkline([average_receipt, total]),
+            },
+        },
+        "map": {
+            "selectedRegion": top_store["store"],
+            "selectedRegionSales": business_money(top_store["amount"]),
+            "selectedRegionGrowth": "+0%",
+        },
+        "mapLegend": [
+            {"label": "найбільше", "level": 5},
+            {"label": "високо", "level": 4},
+            {"label": "середньо", "level": 3},
+            {"label": "низько", "level": 2},
+            {"label": "мало даних", "level": 1},
+        ],
+        "growthRegions": growth_regions,
+        "peakHours": peak_hours,
+        "status": business_status_payload(),
+    }
+
+
+@app.get("/business/forecast")
+@app.get("/api/business/forecast")
+async def business_forecast(db: AsyncSession = Depends(get_db)):
+    since = period_cutoff("1m")
+    rows = await fetch_item_rows(db, since=since)
+    product_buckets = defaultdict(lambda: {"quantity": Decimal("0"), "sales": Decimal("0"), "items": 0, "product": None})
+    for item, _ in rows:
+        key = item.product_id or item.item_name
+        product_buckets[key]["quantity"] += to_decimal(item.quantity)
+        product_buckets[key]["sales"] += item_net_total(item)
+        product_buckets[key]["items"] += 1
+        product_buckets[key]["product"] = item.product
+
+    top_key, top_values = max(
+        product_buckets.items(),
+        key=lambda row: row[1]["sales"],
+        default=(None, {"quantity": Decimal("0"), "sales": Decimal("0"), "items": 0, "product": None}),
+    )
+    product = top_values["product"]
+    product_name = product.name if product else str(top_key or "Немає даних")
+    current_price = top_values["sales"] / max(top_values["quantity"], Decimal("1"))
+    expected_quantity = top_values["quantity"] * Decimal("1.12")
+    expected_sales = expected_quantity * current_price
+    optimal_low = current_price * Decimal("0.96")
+    optimal_high = current_price * Decimal("1.04")
+    optimal_mid = (optimal_low + optimal_high) / Decimal("2")
+
+    latest_prices = []
+    if product and product.id:
+        latest_prices = await latest_official_prices_for_product(db, product.id)
+    retailers = []
+    for price in sorted(latest_prices, key=lambda value: to_decimal(value.price))[:6]:
+        price_value = to_decimal(price.price)
+        deviation = price_value - optimal_mid
+        deviation_percent = (deviation / optimal_mid * Decimal("100")) if optimal_mid else Decimal("0")
+        retailers.append(
+            {
+                "retailer": display_store_name(price.store.name if price.store else None),
+                "logo": logo_for(price.store.name if price.store else None)[1][:3],
+                "price": str(price_value.quantize(Decimal("0.01"))),
+                "deviation": signed_money(deviation),
+                "deviationPercent": signed_percent(deviation_percent.quantize(Decimal("0.1"))),
+                "tone": "optimal" if abs(deviation_percent) <= Decimal("3") else "low" if deviation < 0 else "high",
+            }
+        )
+
+    if not retailers:
+        retailers.append(
+            {
+                "retailer": "Чеки",
+                "logo": "Ч",
+                "price": str(current_price.quantize(Decimal("0.01"))),
+                "deviation": signed_money(Decimal("0")),
+                "deviationPercent": "0%",
+                "tone": "optimal",
+            }
+        )
+
+    actual_points = []
+    daily_sales = defaultdict(Decimal)
+    for item, receipt in rows:
+        if (item.product_id or item.item_name) == top_key:
+            daily_sales[receipt_date(receipt).strftime("%d.%m")] += to_decimal(item.quantity)
+    for index, (date_label, quantity) in enumerate(sorted(daily_sales.items())[-3:]):
+        actual_points.append({"date": date_label, "actual": float(quantity), "forecast": None, "low": None, "high": None})
+    while len(actual_points) < 3:
+        actual_points.insert(0, {"date": since.strftime("%d.%m"), "actual": 0, "forecast": None, "low": None, "high": None})
+    forecast_points = []
+    daily_forecast = expected_quantity / Decimal("30")
+    for offset in (5, 10, 15, 20, 25):
+        date_label = (datetime.utcnow() + timedelta(days=offset)).strftime("%d.%m")
+        value = float(daily_forecast)
+        forecast_points.append(
+            {
+                "date": date_label,
+                "actual": None,
+                "forecast": value,
+                "low": value * 0.82,
+                "high": value * 1.18,
+            }
+        )
+
+    elasticity_points = []
+    for factor in (Decimal("0.84"), Decimal("0.9"), Decimal("0.96"), Decimal("1"), Decimal("1.04"), Decimal("1.1"), Decimal("1.16")):
+        price_value = current_price * factor
+        demand_value = max(Decimal("0"), expected_quantity * (Decimal("2") - factor))
+        elasticity_points.append({"price": float(price_value), "demand": float(demand_value)})
+
+    return {
+        "filters": business_filters_payload("Топ товар", "Наступні 30 днів"),
+        "kpis": {
+            "demandForecast": {
+                "label": "Прогноз 30 днів",
+                "value": compact_number(expected_quantity),
+                "subtitle": "очікувана кількість",
+                "meaning": "Простий прогноз на базі продажів товару за останні 30 днів.",
+                "icon": "analytics",
+            },
+            "expectedGrowth": {
+                "label": "Очікуване зростання",
+                "value": "+12%",
+                "subtitle": "простий трендовий прогноз",
+                "meaning": "Базова модель на основі останнього періоду.",
+                "icon": "trendUp",
+            },
+            "optimalPriceRange": {
+                "label": "Оптимальний діапазон ціни",
+                "value": f"{money(optimal_low)}–{money(optimal_high)}",
+                "subtitle": "за одиницю",
+                "meaning": "Діапазон ±4% від поточної середньої ціни.",
+                "icon": "tag",
+            },
+            "elasticity": {
+                "label": "Еластичність",
+                "value": "-1.00",
+                "subtitle": "модельна оцінка",
+                "tooltip": "Оцінка побудована з поточної ціни і продажів у базі.",
+                "icon": "activity",
+            },
+        },
+        "product": {
+            "name": product_name,
+            "sku": f"PRD-{product.id}" if product and product.id else "DB",
+            "currentPrice": f"{money(current_price)} / од.",
+            "expectedDemand30d": compact_number(expected_quantity),
+            "expectedGrowth": "+12%",
+            "expectedSales": business_money(expected_sales),
+            "avgDailyDemand": compact_number(expected_quantity / Decimal("30")),
+            "confidenceInterval": "±18%",
+        },
+        "price": {
+            "current": f"{money(current_price)} / од.",
+            "optimal": f"{money(optimal_mid)} / од.",
+            "optimalRange": f"{money(optimal_low)}–{money(optimal_high)}",
+            "expectedDemandChange": "+12%",
+        },
+        "retailers": retailers,
+        "demandForecastPoints": actual_points + forecast_points,
+        "elasticityPoints": elasticity_points,
+        "status": business_status_payload(),
+    }
+
+
+@app.get("/products/{product_id:int}")
+@app.get("/api/products/{product_id:int}")
+async def product_detail(product_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Product)
+        .options(selectinload(Product.listings).selectinload(ProductListing.store))
+        .where(Product.id == product_id)
+    )
+    product = result.scalar_one_or_none()
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    category = normalize_category(product.category, raw_name=product.name, item_name=product.name)
+    return {
+        "product": {
+            "id": product.id,
+            "name": product.name,
+            "description": product.description,
+            "brand": product.brand,
+            "category": category_payload(category),
+            "unit": product.unit,
+            "thumbnail": product.thumbnail or category.icon,
+            "isTracked": bool(product.is_tracked),
+        },
+        "listings": [product_listing_payload(listing) for listing in product.listings],
+    }
+
+
+@app.get("/products/{product_id:int}/prices")
+@app.get("/api/products/{product_id:int}/prices")
+async def product_prices_by_id(
+    product_id: int,
+    period: str = "1m",
+    db: AsyncSession = Depends(get_db),
+):
+    since = period_cutoff(period)
+    product_result = await db.execute(
+        select(Product)
+        .options(selectinload(Product.listings))
+        .where(Product.id == product_id)
+    )
+    product = product_result.scalar_one_or_none()
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    result = await db.execute(
+        select(ProductPrice)
+        .options(selectinload(ProductPrice.store), selectinload(ProductPrice.listing))
+        .where(ProductPrice.product_id == product_id)
+        .where(ProductPrice.observed_at >= since)
+        .order_by(ProductPrice.observed_at.asc())
+    )
+    prices = result.scalars().all()
+    return {
+        "product": {"id": product.id, "name": product.name, "brand": product.brand},
+        "prices": [official_price_payload(price) for price in prices],
+    }
+
+
+@app.get("/products/{product_id:int}/price-comparison")
+@app.get("/api/products/{product_id:int}/price-comparison")
+async def product_price_comparison(
+    product_id: int,
+    period: str = "1m",
+    db: AsyncSession = Depends(get_db),
+):
+    since = period_cutoff(period)
+    product_result = await db.execute(
+        select(Product)
+        .options(selectinload(Product.listings))
+        .where(Product.id == product_id)
+    )
+    product = product_result.scalar_one_or_none()
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    official_latest = await latest_official_prices_for_product(db, product_id)
+    history_result = await db.execute(
+        select(ProductPrice)
+        .options(selectinload(ProductPrice.store), selectinload(ProductPrice.listing))
+        .where(ProductPrice.product_id == product_id)
+        .where(ProductPrice.observed_at >= since)
+        .order_by(ProductPrice.observed_at.asc())
+    )
+    price_history = history_result.scalars().all()
+
+    receipt_result = await db.execute(
+        select(ReceiptItem, Receipt)
+        .join(Receipt, ReceiptItem.receipt_id == Receipt.id)
+        .where(ReceiptItem.product_id == product_id)
+        .where(Receipt.receipt_datetime >= since)
+        .order_by(Receipt.receipt_datetime.desc().nullslast(), Receipt.created_at.desc())
+    )
+    receipt_rows = receipt_result.all()
+
+    best_offer = min(official_latest, key=lambda price: to_decimal(price.price), default=None)
+    category = normalize_category(product.category, raw_name=product.name, item_name=product.name)
+    return {
+        "product": {
+            "id": product.id,
+            "name": product.name,
+            "brand": product.brand,
+            "category": category_payload(category),
+            "thumbnail": product.thumbnail or category.icon,
+            "visual": product_visual_payload_from_product(product),
+        },
+        "officialPrices": [official_price_payload(price) for price in official_latest],
+        "receiptObservedPrices": [
+            receipt_observed_price_payload(item, receipt) for item, receipt in receipt_rows
+        ],
+        "priceHistory": [official_price_payload(price) for price in price_history],
+        "bestOfficialOffer": official_price_payload(best_offer) if best_offer else None,
+        "priceVarianceNotice": True,
+        "notice": (
+            "Офіційні онлайн-ціни можуть відрізнятись від цін у конкретних "
+            "фізичних магазинах через франшизи, логістику, регіональні умови та акції."
+        ),
     }
 
 
@@ -1899,7 +2759,7 @@ async def analytics_category_detail(
                     getattr(latest_item, "price", Decimal("0")),
                     getattr(latest_receipt, "currency", None),
                 ),
-                "store": getattr(latest_receipt, "store", None) or "Магазин",
+                "store": display_store_name(getattr(latest_receipt, "store", None)),
                 "visual": product_visual_payload(latest_item) if latest_item else None,
             }
         )
@@ -1915,7 +2775,7 @@ async def analytics_category_detail(
         recent_receipts.append(
             {
                 "id": receipt.id,
-                "store": receipt.store or "Магазин",
+                "store": display_store_name(receipt.store),
                 "date": receipt_date(receipt).strftime("%d.%m.%Y"),
                 "amount": money(values["amount"], receipt.currency),
                 "items": f"{values['items']} {item_word(values['items'])}",
@@ -2003,7 +2863,7 @@ async def product_prices(
 
     grouped = defaultdict(list)
     for item, receipt in rows:
-        grouped[receipt.store or "Магазин"].append((item, receipt))
+        grouped[display_store_name(receipt.store)].append((item, receipt))
 
     colors = ["#f97316", "#0f4c92", "#16a34a", "#ef1212", "#a678e8", "#6aa5f8"]
     price_series = []

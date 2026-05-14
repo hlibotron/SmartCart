@@ -1,17 +1,49 @@
-import { businessGeographyData } from "../data/businessMockData.js";
 import {
   bindBusinessMockLinks,
   renderBusinessKpiCards,
   renderBusinessPageShell,
 } from "./components.js";
+import { fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
 import { appHref } from "../shared/navigation.js";
+
+let businessGeographyState = null;
+let businessGeographyError = "";
+let geographyRequested = false;
+
+const loadingFilters = {
+  period: "Завантаження",
+  geography: "SmartCart DB",
+  category: "Завантаження",
+  retailer: "Завантаження",
+};
+
+const loadingStatus = {
+  updatedAt: "завантаження",
+  source: "SmartCart DB",
+};
 
 const growthPotentialTitle =
   "Потенціал росту = різниця між поточними продажами і очікуваними продажами, якщо регіон/товар досягне рівня схожих кращих регіонів.";
 
+function renderBusinessDataState(title, message) {
+  return renderBusinessPageShell({
+    activeKey: "geography",
+    title: "Географія та пікові години",
+    filters: loadingFilters,
+    status: loadingStatus,
+    updatedLabel: "Оновлено",
+    children: `
+      <section class="business-overview-card" aria-labelledby="business-data-state-title">
+        <h2 id="business-data-state-title">${title}</h2>
+        <p>${message}</p>
+      </section>
+    `,
+  });
+}
+
 function renderRegionMap() {
-  const { map, mapLegend } = businessGeographyData;
+  const { map, mapLegend } = businessGeographyState;
 
   return `
     <section class="business-overview-card business-geo-map-card" aria-labelledby="business-geo-map-title">
@@ -73,7 +105,7 @@ function renderGrowthRegionsTable() {
           <span>Зміна</span>
           <span>Потенціал</span>
         </div>
-        ${businessGeographyData.growthRegions
+        ${businessGeographyState.growthRegions
           .map(
             (row, index) => `
               <div class="business-growth-row">
@@ -102,7 +134,7 @@ function renderGrowthRegionsTable() {
 }
 
 function renderPeakHeatmap() {
-  const { days, hours, heatmap } = businessGeographyData.peakHours;
+  const { days, hours, heatmap } = businessGeographyState.peakHours;
 
   return `
     <section class="business-overview-card business-peak-hours-card" aria-labelledby="business-peak-title">
@@ -140,7 +172,7 @@ function renderPeakHeatmap() {
 }
 
 function renderPeakSummaryCards() {
-  const { peakHours } = businessGeographyData;
+  const { peakHours } = businessGeographyState;
   const cards = [
     {
       label: "Найактивніший день",
@@ -184,7 +216,7 @@ function renderPeakSummaryCards() {
 }
 
 function renderHourlyBarChart() {
-  const bars = businessGeographyData.peakHours.hourlySales;
+  const bars = businessGeographyState.peakHours.hourlySales;
   const maxValue = Math.max(...bars.map((bar) => bar.value));
 
   return `
@@ -226,14 +258,22 @@ function renderPeakRightPanel() {
 }
 
 export function renderBusinessGeographyPage() {
+  if (businessGeographyError) {
+    return renderBusinessDataState("Не вдалося завантажити дані", businessGeographyError);
+  }
+
+  if (!businessGeographyState) {
+    return renderBusinessDataState("Завантаження даних", "Отримуємо географію та пікові години зі SmartCart DB.");
+  }
+
   return renderBusinessPageShell({
     activeKey: "geography",
     title: "Географія та пікові години",
-    filters: businessGeographyData.filters,
-    status: businessGeographyData.status,
+    filters: businessGeographyState.filters,
+    status: businessGeographyState.status,
     updatedLabel: "Оновлено",
     children: `
-      ${renderBusinessKpiCards(businessGeographyData.kpis, "Ключові показники географії та пікових годин")}
+      ${renderBusinessKpiCards(businessGeographyState.kpis, "Ключові показники географії та пікових годин")}
       <div class="business-geography-row business-geography-row--map">
         ${renderRegionMap()}
         ${renderGrowthRegionsTable()}
@@ -247,5 +287,18 @@ export function renderBusinessGeographyPage() {
 }
 
 export function bindBusinessGeographyPage() {
+  if (!geographyRequested) {
+    geographyRequested = true;
+    fetchJson("/api/business/geography")
+      .then((data) => {
+        businessGeographyState = data;
+        rerenderRoute();
+      })
+      .catch((error) => {
+        businessGeographyError = error.message;
+        rerenderRoute();
+      });
+  }
+
   bindBusinessMockLinks();
 }

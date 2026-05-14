@@ -106,6 +106,7 @@ class Product(Base):
     prices = relationship("ProductPrice", back_populates="product")
     cashback_offers = relationship("CashbackOffer", back_populates="product")
     aliases = relationship("ProductAlias", back_populates="product")
+    listings = relationship("ProductListing", back_populates="product")
 
 
 class Store(Base):
@@ -120,6 +121,35 @@ class Store(Base):
     prices = relationship("ProductPrice", back_populates="store")
     cashback_offers = relationship("CashbackOffer", back_populates="store")
     aliases = relationship("ProductAlias", back_populates="store")
+    listings = relationship("ProductListing", back_populates="store")
+
+
+class ProductListing(Base):
+    __tablename__ = "product_listings"
+
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    store_id = Column(Integer, ForeignKey("stores.id", ondelete="CASCADE"), nullable=False)
+    raw_name = Column(String(255), nullable=False)
+    normalized_name = Column(String(255), nullable=False)
+    brand = Column(String(255))
+    category = Column(String(100))
+    product_url = Column(Text)
+    image_url = Column(Text)
+    availability = Column(Boolean, default=True)
+    package_quantity = Column(Numeric(10, 3))
+    package_unit = Column(String(30))
+    source = Column(String(100), default="official-site-json")
+    source_type = Column(String(50), default="official_store_site")
+    price_scope = Column(String(50), default="official_online_reference")
+    first_seen_at = Column(TIMESTAMP, server_default=func.now())
+    last_seen_at = Column(TIMESTAMP, server_default=func.now())
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    product = relationship("Product", back_populates="listings")
+    store = relationship("Store", back_populates="listings")
+    prices = relationship("ProductPrice", back_populates="listing")
 
 
 class ProductPrice(Base):
@@ -128,15 +158,22 @@ class ProductPrice(Base):
     id = Column(Integer, primary_key=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
     store_id = Column(Integer, ForeignKey("stores.id", ondelete="CASCADE"), nullable=False)
+    listing_id = Column(Integer, ForeignKey("product_listings.id", ondelete="SET NULL"))
     price = Column(Numeric(10, 2), nullable=False)
     currency = Column(String(10), default="UAH")
     observed_at = Column(TIMESTAMP, nullable=False)
+    price_per_unit = Column(Numeric(10, 2))
+    package_quantity = Column(Numeric(10, 3))
+    package_unit = Column(String(30))
     is_promotional = Column(Boolean, default=False)
     source = Column(String(50), default="manual")
+    source_type = Column(String(50), default="manual")
+    price_scope = Column(String(50), default="manual")
     created_at = Column(TIMESTAMP, server_default=func.now())
 
     product = relationship("Product", back_populates="prices")
     store = relationship("Store", back_populates="prices")
+    listing = relationship("ProductListing", back_populates="prices")
 
 
 class CashbackOffer(Base):
