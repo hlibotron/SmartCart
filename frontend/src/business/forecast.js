@@ -48,18 +48,6 @@ async function fetchMarket(params = {}) {
   return res.json();
 }
 
-async function fetchTrend(store = "АТБ") {
-  try {
-    const qs = new URLSearchParams({ store });
-    const res = await fetch(`/api/forecast/trend?${qs}`);
-    if (!res.ok) return { data: [] };
-    return await res.json();
-  } catch (err) {
-    console.error("Помилка fetchTrend:", err);
-    return { data: [] };
-  }
-}
-
 async function fetchBrandImpact(store, brand) {
   try {
     const qs = new URLSearchParams({ store, brand, days: 14 });
@@ -72,12 +60,37 @@ async function fetchBrandImpact(store, brand) {
   }
 }
 
+async function fetchTrend(store = "АТБ") {
+  try {
+    const qs = new URLSearchParams({ store });
+    const res = await fetch(`/api/forecast/trend?${qs}`);
+    if (!res.ok) return { data: [] };
+    return await res.json();
+  } catch (err) {
+    console.error("Помилка fetchTrend:", err);
+    return { data: [] };
+  }
+}
+
+window._updateBrandAnalysis = async function(storeName, brandName) {
+  if (storeName) _brandParams.store = storeName;
+  if (brandName) _brandParams.brand = brandName;
+
+  const row2 = document.getElementById("forecast-row-2");
+  if (row2) row2.innerHTML = _loadingCard("Аналіз бренду", "Оновлення даних...");
+
+  _brandImpact = await fetchBrandImpact(_brandParams.store, _brandParams.brand);
+
+  if (row2 && _brandImpact) {
+    row2.innerHTML = renderBrandImpactChart() + renderBrandImpactStats();
+  }
+};
 
 window._updateTrendStore = async function(storeName) {
   _marketParams.store = storeName; // Оновлюємо глобальний стан
 
-  const row2 = document.getElementById("forecast-row-2");
-  if (row2) row2.innerHTML = _loadingCard("Трафік та Порівняння", `Завантаження даних для ${storeName}...`);
+  const row3 = document.getElementById("forecast-row-3");
+  if (row3) row3.innerHTML = _loadingCard("Трафік та Порівняння", `Завантаження даних для ${storeName}...`);
 
   try {
     // Оновлюємо обидва графіка одночасно, щоб вони були синхронізовані!
@@ -86,23 +99,9 @@ window._updateTrendStore = async function(storeName) {
       fetchMarket(_marketParams)
     ]);
 
-    if (row2) row2.innerHTML = renderTrafficTrendChart(_trend?.data) + renderPriceComparison();
+    if (row3) row3.innerHTML = renderTrafficTrendChart(_trend?.data) + renderPriceComparison();
   } catch (e) {
     console.error(e);
-  }
-};
-
-window._updateBrandAnalysis = async function(storeName, brandName) {
-  if (storeName) _brandParams.store = storeName;
-  if (brandName) _brandParams.brand = brandName;
-
-  const row3 = document.getElementById("forecast-row-3");
-  if (row3) row3.innerHTML = _loadingCard("Аналіз бренду", "Оновлення даних...");
-
-  _brandImpact = await fetchBrandImpact(_brandParams.store, _brandParams.brand);
-
-  if (row3 && _brandImpact) {
-    row3.innerHTML = renderBrandImpactChart() + renderBrandImpactStats();
   }
 };
 // ---------------------------------------------------------------------------
@@ -671,23 +670,10 @@ async function _doRefresh() {
   if (row1) row1.innerHTML = renderElasticityChart() + renderProductDetails();
 
   const row2 = document.getElementById("forecast-row-2");
-  if (row2) row2.innerHTML = renderBrandImpactChart(_trend?.data) + renderBrandImpactStats();
+  if (row2) row2.innerHTML = renderBrandImpactChart() + renderBrandImpactStats();
 
   const row3 = document.getElementById("forecast-row-3");
-  if (row3) row3.innerHTML = renderTrafficTrendChart() + renderTrafficTrendChart();
-  // const stripWrap = document.getElementById("forecast-strip");
-  // if (stripWrap) stripWrap.innerHTML = `
-  //   <section class="business-forecast-strip">
-  //     ${[
-  //       { label: "Поточна ціна",          value: `${_pricing.currentPrice.toFixed(2)} ₴`, icon: "tag"      },
-  //       { label: "Оптимальна ціна",        value: `${_pricing.optimalPrice.toFixed(2)} ₴`, icon: "target"   },
-  //       { label: "Очікувана зміна попиту", value: _pricing.expectedDemandChange,            icon: "analytics"},
-  //     ].map((item) => `
-  //       <article>
-  //         <span>${icon(item.icon)}</span>
-  //         <div><small>${item.label}</small><strong>${item.value}</strong></div>
-  //       </article>`).join("")}
-  //   </section>`;
+  if (row3) row3.innerHTML = renderTrafficTrendChart(_trend?.data) + renderPriceComparison();
 
   if (statusEl) { statusEl.textContent = ""; statusEl.style.opacity = "0"; }
   _loading = false;
@@ -770,17 +756,4 @@ export async function bindBusinessForecastPage() {
   const row3 = document.getElementById("forecast-row-3");
   if (row3) row3.innerHTML = renderTrafficTrendChart(_trend?.data) + renderPriceComparison();
 
-  // const stripWrap = document.getElementById("forecast-strip");
-  // if (stripWrap) stripWrap.innerHTML = `
-  //   <section class="business-forecast-strip">
-  //     ${[
-  //       { label: "Поточна ціна",          value: `${_pricing.currentPrice.toFixed(2)} ₴`, icon: "tag"      },
-  //       { label: "Оптимальна ціна",        value: `${_pricing.optimalPrice.toFixed(2)} ₴`, icon: "target"   },
-  //       { label: "Очікувана зміна попиту", value: _pricing.expectedDemandChange,            icon: "analytics"},
-  //     ].map((item) => `
-  //       <article>
-  //         <span>${icon(item.icon)}</span>
-  //         <div><small>${item.label}</small><strong>${item.value}</strong></div>
-  //       </article>`).join("")}
-  //   </section>`;
 }

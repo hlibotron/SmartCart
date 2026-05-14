@@ -40,16 +40,21 @@ PGPASSWORD=postgres psql -h 127.0.0.1 -p 5432 -U postgres -d receipts_db -c 'sel
 Очікувано:
 
 receipts_db | postgres
+
 📁 3. Створення проєкту
 mkdir ai_receipts_backend
 cd ai_receipts_backend
+
 🐍 4. Створення virtual environment
 python -m venv venv
+
 ▶️ 5. Активація venv
 .\venv\Scripts\Activate.ps1
+
 📦 6. Встановлення залежностей
 pip install -r requirements.txt
 pip install fastapi uvicorn sqlalchemy asyncpg psycopg2-binary
+
 🧱 7. Структура проєкту
 ai_receipts_backend/
 │
@@ -63,6 +68,7 @@ ai_receipts_backend/
 │       ├── models.py
 │
 ├── venv/
+
 🗄️ 8. Підключення до БД
 app/db/database.py
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -101,6 +107,7 @@ schema=ok
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/receipts_db
 
 Файл `.env` не додається в git. Для команди є приклад `.env.example`.
+
 📊 10. Моделі (таблиці)
 app/db/models.py
 
@@ -167,8 +174,15 @@ curl -s http://127.0.0.1:8000/api/product-match-candidates
 curl -X POST http://127.0.0.1:8000/api/product-match-candidates/1/resolve \
   -H 'Content-Type: application/json' \
   -d '{"product_id":12,"create_alias":true}'
+11. ML Модель та Ініціалізація БД
+Оскільки проект використовує аналітику цін, перед запуском потрібно підготувати модель.
 
-🚀 11. FastAPI сервер
+Натренувати модель:
+
+python train_xgb_model.py
+Це створить файл analytics/xgb_pricing_model.pkl.
+
+🚀 12. FastAPI сервер
 app/main.py
 from fastapi import FastAPI
 
@@ -177,9 +191,11 @@ app = FastAPI()
 @app.get("/")
 def root():
     return {"status": "ok"}
-▶️ 12. Запуск сервера
+
+▶️ 13. Запуск сервера
 python -m uvicorn app.main:app --reload
-🌐 13. Перевірка
+
+🌐 14. Перевірка
 
 В браузері:
 
@@ -193,7 +209,7 @@ Health endpoints:
 
 curl -s http://127.0.0.1:8000/health
 curl -s http://127.0.0.1:8000/api/db/health
-🧪 14. Перевірка БД
+🧪 15. Перевірка БД
 
 Через DBeaver:
 
