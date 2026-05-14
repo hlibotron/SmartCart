@@ -53,6 +53,9 @@ from app.schemas import (
 
 app = FastAPI(title="SmartCart API")
 
+from app.routers import forecast as forecast_router
+app.include_router(forecast_router.router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
@@ -255,7 +258,6 @@ app.mount(
 @app.get("/")
 def root():
     return {"status": "ok"}
-
 
 @app.get("/health")
 @app.get("/api/health")
