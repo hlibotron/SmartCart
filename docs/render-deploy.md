@@ -7,7 +7,7 @@ Create a Render Web Service from the repository root.
 ```text
 Runtime: Python 3
 Root Directory: leave empty
-Build Command: pip install -r app/requirements.txt
+Build Command: pip install -r requirements.txt
 Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
