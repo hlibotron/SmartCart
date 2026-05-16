@@ -1,261 +1,171 @@
-📦 AI Receipts Backend — документація запуску
-🧱 1. Вимоги
+# SmartCart Backend
 
-Перед стартом має бути встановлено:
+This folder contains the FastAPI backend for SmartCart: API routes, database
+models, schema initialization, seed scripts, receipt scanning, product matching,
+price comparison, cashback, and analytics endpoints.
 
-Python 3.10+
-Docker Desktop
-Git (опційно)
-DBeaver (для перевірки БД)
-🐳 2. Піднімаємо PostgreSQL (Docker)
-docker run --name ai-receipts-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=receipts_db -p 5432:5432 -d postgres
+Run backend commands from the repository root so `app` is imported as a Python
+package.
 
-Важливо: для SmartCart використовується саме Docker-БД `ai-receipts-db`
-з базою `receipts_db`. Якщо порт `5432` вже зайнятий локальним PostgreSQL
-або іншою БД, Docker-контейнер не зможе коректно зайняти цей порт.
+## Requirements
 
-Перевірити, хто слухає `5432`:
+- Python 3.10+
+- PostgreSQL exposed on host port `5433`
+- Backend dependencies from `app/requirements.txt`
 
-sudo ss -ltnp 'sport = :5432'
+## Database
 
-Якщо там не `ai-receipts-db`, а локальний процес `postgres`, зупини локальний
-PostgreSQL перед запуском Docker-БД для цього проєкту:
+Local Docker PostgreSQL. PostgreSQL uses port `5432` inside the container and
+is exposed as `5433` on the host machine:
 
-sudo systemctl stop postgresql
+```bash
+docker run --name ai-receipts-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=receipts_db \
+  -p 5433:5432 \
+  -d postgres
+```
 
-Після цього запусти команду `docker run` вище.
+If the container already exists:
 
-✔ Перевірка
-docker ps
+```bash
+docker start ai-receipts-db
+```
 
-має бути:
+Expected local database URL:
 
-ai-receipts-db
-status: Up
+```text
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/receipts_db
+```
 
-Перевірка підключення до проєктної БД:
+## Environment
 
-PGPASSWORD=postgres psql -h 127.0.0.1 -p 5432 -U postgres -d receipts_db -c 'select current_database(), current_user;'
+Copy the root template:
 
-Очікувано:
+```bash
+cp .env.example .env
+```
 
-receipts_db | postgres
+Important variables:
 
-📁 3. Створення проєкту
-mkdir ai_receipts_backend
-cd ai_receipts_backend
+```text
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/receipts_db
+DATABASE_ECHO=false
+CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+SMARTCART_AUTH_SECRET=change-me
+OPENAI_API_KEY=
+OPENAI_RECEIPT_MODEL=gpt-4.1-mini
+RECEIPT_UPLOAD_DIR=uploads/receipt-scans
+PRODUCT_IMAGE_DIR=uploads/product-images
+CATEGORY_IMAGE_DIR=uploads/category-images
+STORE_LOGO_DIR=uploads/store-logos
+RECEIPT_MAX_IMAGE_BYTES=10485760
+```
 
-🐍 4. Створення virtual environment
-python -m venv venv
+`OPENAI_API_KEY` is required only for real receipt image extraction.
 
-▶️ 5. Активація venv
-.\venv\Scripts\Activate.ps1
+## Run Locally
 
-📦 6. Встановлення залежностей
+From the repository root:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-pip install fastapi uvicorn sqlalchemy asyncpg psycopg2-binary
-
-🧱 7. Структура проєкту
-ai_receipts_backend/
-│
-├── app/
-│ ├── main.py
-│ ├── init_db.py
-│ ├── schemas.py
-│ │
-│ ├── db/
-│ ├── database.py
-│ ├── models.py
-│
-├── venv/
-
-🗄️ 8. Підключення до БД
-app/db/database.py
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
-
-DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/receipts_db"
-
-engine = create_async_engine(DATABASE_URL, echo=True)
-
-AsyncSessionLocal = sessionmaker(
-bind=engine,
-class\_=AsyncSession,
-expire_on_commit=False
-)
-
-Base = declarative_base()
-🧠 9. Створення/оновлення таблиць
-
-Команда нижче створює таблиці й безпечно додає нові nullable/default-колонки,
-якщо вони потрібні фронтенду. Вона не очищає існуючі дані.
-
 python -m app.init_db
+python -m uvicorn app.main:app --reload
+```
 
-Перевірка схеми без змін у БД:
+Backend URLs:
 
+- API root: `http://127.0.0.1:8000`
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- Health: `http://127.0.0.1:8000/health`
+- DB health: `http://127.0.0.1:8000/api/db/health`
+
+## Database Maintenance
+
+Create or update the schema without deleting existing data:
+
+```bash
+python -m app.init_db
+```
+
+Check the active database and schema:
+
+```bash
 python -m app.check_db
-
-Очікувано:
-
-database=receipts_db
-user=postgres
-schema=ok
-
-У цьому репозиторії `DATABASE_URL` можна тримати в локальному `.env`:
-
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/receipts_db
-
-Файл `.env` не додається в git. Для команди є приклад `.env.example`.
-
-📊 10. Моделі (таблиці)
-app/db/models.py
-
-Основні таблиці:
-
-users
-receipts
-receipt_items
-
-Додаткові таблиці для frontend-аналітики та майбутніх реальних даних:
-
-products
-stores
-product_prices
-cashback_offers
-
-Таблиці для OCR/AI сканування чеків:
-
-receipt_ocr_jobs
-product_aliases
-product_match_candidates
-
-OCR pipeline:
-
-1. Зовнішній OCR/AI сервіс читає фото чеку.
-2. Backend отримує `image_url` і створює scan job:
-
-curl -X POST http://127.0.0.1:8000/api/receipt-scans \
- -H 'Content-Type: application/json' \
- -d '{"user":{"telegram_id":1001,"username":"demo"},"image_url":"https://example.com/receipt.jpg","provider":"manual"}'
-
-3. OCR/AI повертає структурований JSON у backend:
-
-curl -X POST http://127.0.0.1:8000/api/receipt-scans/1/parsed \
- -H 'Content-Type: application/json' \
- -d '{
-"store":"АТБ",
-"receipt_datetime":"2026-05-11T12:35:00",
-"currency":"UAH",
-"items":[{
-"raw_name":"МОЛОКО ГАЛИЧИНА 2.5% 900Г",
-"item_name":"Молоко 2.5%",
-"price":24.90,
-"quantity":2,
-"unit":"шт",
-"discount_amount":4.00,
-"category":"Молочні",
-"brand":"Галичина",
-"thumbnail":"milk",
-"is_promotional":true
-}]
-}'
-
-4. Backend match-ить `raw_name` з `products` і `product_aliases`.
-5. Якщо збіг впевнений, чек записується як matched.
-6. Якщо збіг невпевнений, створюється `product_match_candidates` для ручного підтвердження.
-
-### Trial mock receipt for analytics
-
-To add a realistic demo receipt into PostgreSQL and make it visible in the
-receipt analytics pages, run:
-
-```bash
-cd smartcart
-app/.venv/bin/python -m app.seed_mock_receipt
 ```
 
-The seed is idempotent: rerunning it updates the same trial receipt instead of
-creating duplicates. It inserts a recent `Сільпо` receipt with mixed grocery,
-dairy, fruit, and drinks items, plus discounts and cashback values so the
-analytics screens have something useful to aggregate.
+## Demo Data
 
-### Demo price dynamics
-
-To seed five receipts across different stores and a price history for
-`БАТОНЧИК SNICKERS CREAMY MARS 54 Г`, run:
+Seed a realistic demo receipt for receipt and analytics pages:
 
 ```bash
-cd smartcart
-app/.venv/bin/python -m app.seed_demo_price_data
+python -m app.seed_mock_receipt
 ```
 
-This script is also idempotent and creates official-store price history across
-three stores so the product price chart has visible dynamics.
+Seed product price history and demo price dynamics:
 
-Перегляд pending-кандидатів:
+```bash
+python -m app.seed_demo_price_data
+```
 
-curl -s http://127.0.0.1:8000/api/product-match-candidates
+Seed retail store locations and administrative geography data:
 
-Підтвердження кандидата і створення alias для майбутніх чеків:
+```bash
+python -m app.seed_retail_store_locations
+python -m app.seed_admin_geo_units
+```
 
-curl -X POST http://127.0.0.1:8000/api/product-match-candidates/1/resolve \
-<<<<<<< HEAD
--H 'Content-Type: application/json' \
- -d '{"product_id":12,"create_alias":true}' 11. ML Модель та Ініціалізація БД
-Оскільки проект використовує аналітику цін, перед запуском потрібно підготувати модель.
+## Receipt Scanning
 
-Натренувати модель:
+The frontend sends camera photos to:
 
-python train_xgb_model.py
-Це створить файл analytics/xgb_pricing_model.pkl.
+```text
+POST /api/receipt-scans/upload
+```
 
-🚀 12. FastAPI сервер
-app/main.py
-from fastapi import FastAPI
+The backend stores the image, sends it to OpenAI for structured receipt
+extraction, writes the receipt to PostgreSQL, and returns a `receipt_id` for the
+receipt summary page.
 
-app = FastAPI()
+Manual OCR pipeline endpoints are also available:
 
-@app.get("/")
-def root():
-<<<<<<< HEAD
-return {"status": "ok"}
+- `POST /api/receipt-scans`
+- `POST /api/receipt-scans/{scan_id}/parsed`
+- `GET /api/product-match-candidates`
+- `POST /api/product-match-candidates/{candidate_id}/resolve`
 
-# ▶️ 13. Запуск сервера
+## Assets
 
-return {"status": "ok"}
-▶️ 12. Запуск сервера
+Image folders live under `app/uploads/`:
 
-> > > > > > > 7932d6a (db more data, button scan, better ui)
-> > > > > > > python -m uvicorn app.main:app --reload
+- `receipt-scans/` for uploaded receipt photos.
+- `product-images/` for product photos.
+- `category-images/` for fallback category images.
+- `store-logos/` for retail chain logos.
 
-🌐 14. Перевірка
+The repository keeps placeholder and default assets, while generated uploads are
+ignored by git.
 
-В браузері:
+## Import Official Store Prices
 
-http://127.0.0.1:8000
+Validate an official store JSON export without modifying the database:
 
-Swagger:
+```bash
+python -m app.import_products_json /path/to/json-or-zip-or-folder \
+  --source official-site-json \
+  --dry-run
+```
 
-http://127.0.0.1:8000/docs
+Import after validation:
 
-Health endpoints:
+```bash
+python -m app.import_products_json /path/to/json-or-zip-or-folder \
+  --source official-site-json
+```
 
-curl -s http://127.0.0.1:8000/health
-curl -s http://127.0.0.1:8000/api/db/health
-🧪 15. Перевірка БД
-
-Через DBeaver:
-
-host: localhost
-port: 5432
-db: receipts_db
-user: postgres
-pass: postgres
-🔥 Що ти отримуєш після цього
-
-✔ працюючий backend
-✔ PostgreSQL schema
-✔ FastAPI сервер
-✔ готову базу під AI pipeline
-✔ основу для n8n / OCR / GPT
+The importer accepts a JSON file, a folder with JSON files, or a ZIP containing
+only JSON files.

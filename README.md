@@ -1,189 +1,140 @@
-# Smartcart
+# SmartCart
 
-Repository layout:
+SmartCart is a web application for personal grocery spend tracking and retail
+price analytics. Users can scan receipts, see purchase history, compare product
+prices across stores, track cashback, and view category analytics. The business
+side of the product provides market, geography, and pricing insights based on
+receipt and official-store price data.
+
+## Hackathon Checklist
+
+- GitHub repository: publish this repository with public access.
+- README: product description, tech stack, and local run instructions are below.
+- Secrets: do not commit local `.env` files or real API keys. Use
+  `.env.example` and `frontend/.env.example` as templates.
+
+## Product Features
+
+- Receipt scanning and structured item extraction.
+- Purchase history with receipt details and category fallback images.
+- Product catalog with price comparison and store-level price history.
+- Personal analytics by category, spend, discounts, and cashback.
+- Store logos, category images, and product image fallbacks.
+- Business analytics dashboards for geography, categories, and price forecasts.
+
+## Tech Stack
+
+- Backend: Python, FastAPI, SQLAlchemy async, PostgreSQL, Pydantic.
+- AI/OCR: OpenAI API for receipt extraction.
+- Analytics/ML: pandas, scikit-learn, XGBoost, joblib.
+- Frontend: Vite, plain HTML/CSS/JavaScript.
+- Database: PostgreSQL, usually run locally through Docker.
+
+## Repository Layout
 
 ```text
 smartcart/
-├── app/          # FastAPI backend
-└── frontend/     # Vite HTML/CSS/JS frontend
+├── app/                 # FastAPI backend, database models, seed/import scripts
+├── frontend/            # Vite frontend application
+├── analytics/           # pricing model data and training script
+├── docs/                # deployment and technical notes
+├── .env.example         # backend environment template
+└── requirements.txt     # delegates to app/requirements.txt
 ```
+
+## Prerequisites
+
+- Python 3.10+
+- Node.js 20+; Node.js 22 is recommended
+- npm
+- Docker Desktop or another local PostgreSQL setup
+- Git
+
+## Local Setup
+
+Clone the repository and enter the project root:
+
+```bash
+git clone <your-public-github-repo-url>
+cd smartcart
+```
+
+Create backend environment files:
+
+```bash
+cp .env.example .env
+cp frontend/.env.example frontend/.env
+```
+
+For local development the backend `.env` expects PostgreSQL on host port `5433`:
+
+```text
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/receipts_db
+CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+SMARTCART_AUTH_SECRET=change-me
+OPENAI_API_KEY=
+OPENAI_RECEIPT_MODEL=gpt-4.1-mini
+```
+
+`OPENAI_API_KEY` is only required for real receipt photo extraction. The rest of
+the application can run with seeded/demo data without it.
+
+## Database
+
+Start PostgreSQL locally. The database listens on port `5432` inside the
+container and is exposed as `5433` on the host machine:
+
+```bash
+docker run --name ai-receipts-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=receipts_db \
+  -p 5433:5432 \
+  -d postgres
+```
+
+If the container already exists, start it instead:
+
+```bash
+docker start ai-receipts-db
+```
+
+If your local machine already has another PostgreSQL on `5432`, keep it as is.
+SmartCart connects through `localhost:5433`, so the project database does not
+need to take over host port `5432`.
 
 ## Backend
 
+From the repository root:
+
 ```bash
-cd app
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+python -m app.init_db
 python -m uvicorn app.main:app --reload
 ```
 
-The backend runs on `http://127.0.0.1:8000`.
+The API runs at:
 
-### Receipt camera scan
+- `http://127.0.0.1:8000`
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
+- DB health check: `http://127.0.0.1:8000/api/db/health`
 
-The frontend sends camera photos to `POST /api/receipt-scans/upload`. The
-backend stores the image locally, sends it to OpenAI for structured receipt
-extraction, creates the receipt in PostgreSQL, and returns `receipt_id` for the
-existing `/receipt-summary?receipt=<id>` page.
-
-Required backend environment:
+Useful backend commands:
 
 ```bash
-OPENAI_API_KEY=sk-...
-OPENAI_RECEIPT_MODEL=gpt-4.1-mini
-RECEIPT_UPLOAD_DIR=uploads/receipt-scans
-PRODUCT_IMAGE_DIR=uploads/product-images
-CATEGORY_IMAGE_DIR=uploads/category-images
-STORE_LOGO_DIR=uploads/store-logos
-RECEIPT_MAX_IMAGE_BYTES=10485760
+python -m app.check_db
+python -m app.seed_mock_receipt
+python -m app.seed_demo_price_data
+python -m app.seed_retail_store_locations
+python -m app.seed_admin_geo_units
 ```
-
-### Product photos
-
-To make receipt summaries use a real product photo, put the image into:
-
-```text
-app/uploads/product-images/
-```
-
-Supported formats are `.webp`, `.jpg`, `.jpeg`, and `.png`.
-
-Recommended names:
-
-```text
-product-{product_id}.webp
-{product_id}.webp
-normalized-product-name.webp
-```
-
-Examples:
-
-```text
-app/uploads/product-images/product-12.webp
-app/uploads/product-images/12.webp
-app/uploads/product-images/молоко-2-5.webp
-```
-
-The backend checks this folder when building receipt item `visual` data. If no
-matching photo exists, the frontend keeps using the category fallback image.
-
-### Category photos
-
-Default category photos live in:
-
-```text
-app/uploads/category-images/
-```
-
-Expected names:
-
-```text
-dairy.png
-meat.png
-vegetables.png
-fruits.png
-drinks.png
-grocery.png
-other.png
-```
-
-The backend uses these files when a specific product photo is missing.
-
-### Store logos
-
-Store logos live in:
-
-```text
-app/uploads/store-logos/
-```
-
-Recommended names:
-
-```text
-atb.png
-silpo.png
-novus.png
-auchan.png
-```
-
-You can also use the normalized store name, for example `атб.png` or
-`сільпо.png`. The backend uses these logos in receipt lists, receipt summary,
-and product price store rows.
-
-### Official store product prices
-
-Official store-site JSON exports are imported with a dedicated script. These
-prices are stored as reference online prices, not guaranteed prices for every
-physical store location in the same chain.
-
-Validate an export without touching the database:
-
-```bash
-cd smartcart
-app/.venv/bin/python -m app.import_products_json /path/to/json-or-zip-or-folder \
-  --source official-site-json \
-  --dry-run
-```
-
-Import after validation:
-
-```bash
-app/.venv/bin/python -m app.init_db
-app/.venv/bin/python -m app.import_products_json /path/to/json-or-zip-or-folder \
-  --source official-site-json
-```
-
-The importer accepts a JSON file, a folder with JSON files, or a ZIP containing
-only JSON files. It writes products, stores, product listings, aliases, and
-price history. Price comparison APIs read official prices separately from
-receipt-observed prices.
 
 ## Frontend
 
-Frontend stack: plain `HTML/CSS/JS` with Vite as a local dev/build tool.
-
-Frontend source layout:
-
-```text
-frontend/
-├── index.html              # Single app entry point
-├── src/
-│   ├── app.js              # App shell: status bar, header, bottom nav, route render
-│   ├── router.js           # Route registry for all pages
-│   ├── data/
-│   │   ├── home.js         # Home page content/data
-│   │   └── navigation.js   # Bottom navigation items
-│   ├── pages/              # One module per app page
-│   │   ├── home.js
-│   │   ├── products.js
-│   │   ├── analytics.js
-│   │   ├── profile.js
-│   │   ├── receipts.js
-│   │   └── cashback.js
-│   ├── shared/
-│   │   └── icons.js        # Reusable inline SVG icons
-│   └── styles/
-│       ├── main.css        # CSS imports
-│       ├── base.css        # Variables, reset, typography, app frame
-│       ├── components.css  # Shared app/header/nav/card components
-│       └── home.css        # Home-specific layout and illustration
-```
-
-To add a new frontend page:
-
-1. Create `frontend/src/pages/<page>.js` with a `render<Page>Page()` function and optional bind function.
-2. Register it in `frontend/src/router.js`.
-3. Add a bottom-nav item in `frontend/src/data/navigation.js` only if it belongs in the fixed nav.
-4. Put page-specific static content in `frontend/src/data/` when it starts growing.
-5. Keep shared UI styles in `components.css`; use a page CSS file only for page-specific layout.
-
-Required on developer machine:
-
-- Node.js `22.x` recommended, `20.x` minimum
-- npm, usually installed together with Node.js
-
-Project dependencies are installed locally into `frontend/node_modules/`:
+Open a second terminal and run:
 
 ```bash
 cd frontend
@@ -191,18 +142,51 @@ npm install
 npm run dev
 ```
 
-The frontend runs on `http://127.0.0.1:5173`.
+The frontend runs at `http://127.0.0.1:5173`.
 
-During development, frontend API calls to `/api/*` are proxied to the FastAPI server on port `8000`.
+During development, Vite proxies:
+
+- `/api/*` to `http://127.0.0.1:8000`
+- `/uploads/*` to `http://127.0.0.1:8000`
 
 Useful frontend commands:
 
 ```bash
-cd frontend
-npm install      # install local frontend dependencies from package-lock.json
-npm run dev      # start local dev server
-npm run build    # build static files into frontend/dist
-npm run preview  # preview the production build locally
+npm run build
+npm run preview
 ```
 
-Do not install frontend packages globally for this project. Use local npm dependencies only.
+## Demo Flow
+
+1. Start PostgreSQL.
+2. Start the backend.
+3. Seed demo data:
+
+   ```bash
+   source .venv/bin/activate
+   python -m app.seed_mock_receipt
+   python -m app.seed_demo_price_data
+   ```
+
+4. Start the frontend.
+5. Open `http://127.0.0.1:5173` and test receipts, products, analytics, and
+   cashback pages.
+
+## Receipt Scan Assets
+
+Uploaded and static images are served from `app/uploads/`:
+
+- `app/uploads/receipt-scans/` for uploaded receipt photos.
+- `app/uploads/product-images/` for product photos.
+- `app/uploads/category-images/` for category fallback images.
+- `app/uploads/store-logos/` for store logos.
+
+Supported product image formats are `.webp`, `.jpg`, `.jpeg`, and `.png`.
+
+## Deployment
+
+Render deployment notes are available in [docs/render-deploy.md](docs/render-deploy.md).
+
+For production, use a managed PostgreSQL database, set a strong
+`SMARTCART_AUTH_SECRET`, configure `CORS_ORIGINS` to the deployed frontend URL,
+and store API keys only in the hosting provider's environment variables.
