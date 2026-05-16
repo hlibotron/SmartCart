@@ -2,6 +2,7 @@
 @import "./components.css";
 @import "./home.css";
 @import "./receipts.css";
+@import "./receipt-analysis.css";
 @import "./receipt-summary.css";
 @import "./analytics.css";
 @import "./cashback.css";

@@ -1,11 +1,11 @@
 import "./styles/main.css";
 import { navigationItems } from "./data/navigation.js";
 import { routes } from "./router.js";
-import { apiUrl } from "./shared/api.js";
-import { authHeaders, isAuthenticated } from "./shared/authSession.js";
+import { isAuthenticated } from "./shared/authSession.js";
 import { cartIcon, icon } from "./shared/icons.js";
 import { appHref, stripBasePath } from "./shared/navigation.js";
 import { hasCompletedOnboarding } from "./shared/onboarding.js";
+import { isReceiptScanLocked, startReceiptScan } from "./shared/receiptScanSession.js";
 
 const app = document.querySelector("#app");
 
@@ -17,6 +17,10 @@ function getRoute(pathname = window.location.pathname) {
 
   if (routePath === "/" && !hasCompletedOnboarding()) {
     return routes["/onboarding"];
+  }
+
+  if (isReceiptScanLocked() && routePath !== "/receipt-analysis") {
+    return routes["/receipt-analysis"];
   }
 
   if (route.authOnly && isAuthenticated()) {
@@ -169,6 +173,18 @@ function renderOnboardingShell(route) {
   `;
 }
 
+function renderReceiptAnalysisShell(route) {
+  return `
+    <div class="app-shell app-shell--locked">
+      <div class="phone-frame phone-frame--locked">
+        <main class="content content--locked" id="page" tabindex="-1">
+          ${route.render()}
+        </main>
+      </div>
+    </div>
+  `;
+}
+
 function renderApp() {
   const route = getRoute();
 
@@ -178,6 +194,8 @@ function renderApp() {
       ? renderBusinessShell(route)
       : route.layout === "onboarding"
         ? renderOnboardingShell(route)
+        : route.layout === "receipt-analysis"
+          ? renderReceiptAnalysisShell(route)
       : `
       <div class="app-shell">
         <div class="phone-frame">
@@ -215,32 +233,6 @@ function setGlobalScanPending(isPending) {
 
   scanButton.disabled = isPending;
   scanButton.classList.toggle("is-loading", isPending);
-}
-
-async function uploadReceiptPhoto(file) {
-  const formData = new FormData();
-  formData.append("image", file);
-
-  const response = await fetch(apiUrl("/api/receipt-scans/upload"), {
-    method: "POST",
-    headers: {
-      ...authHeaders(),
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const details = await response.json().catch(() => null);
-    throw new Error(details?.detail || `Помилка сканування: ${response.status}`);
-  }
-
-  const result = await response.json();
-  const receiptId = result.receipt_id;
-  if (!receiptId) {
-    throw new Error("Сервер не повернув ID чеку");
-  }
-
-  navigateTo(`/receipt-summary?receipt=${encodeURIComponent(receiptId)}`);
 }
 
 function bindGlobalInteractions() {
@@ -282,9 +274,13 @@ function bindGlobalInteractions() {
 
     setGlobalScanPending(true);
     try {
-      await uploadReceiptPhoto(file);
+      const scanPromise = startReceiptScan(file);
+      navigateTo("/receipt-analysis");
+      const result = await scanPromise;
+      navigateTo(`/receipt-summary?receipt=${encodeURIComponent(result.receipt_id)}`);
     } catch (error) {
       console.warn(error.message);
+      navigateTo("/receipt-analysis");
     } finally {
       setGlobalScanPending(false);
       event.target.value = "";

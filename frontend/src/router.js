@@ -16,6 +16,10 @@ import {
 import { bindProductsPage, renderProductsPage } from "./pages/products.js";
 import { bindProductPricePage, renderProductPricePage } from "./pages/productPrice.js";
 import { bindProfilePage, renderProfilePage } from "./pages/profile.js";
+import {
+  bindReceiptAnalysisPage,
+  renderReceiptAnalysisPage,
+} from "./pages/receiptAnalysis.js";
 import { bindReceiptSummaryPage, renderReceiptSummaryPage } from "./pages/receiptSummary.js";
 import { bindReceiptsPage, renderReceiptsPage } from "./pages/receipts.js";
 import { bindStoreMapPage, renderStoreMapPage } from "./pages/storeMap.js";
@@ -45,6 +49,14 @@ export const routes = {
     requiresAuth: true,
     render: renderReceiptSummaryPage,
     bind: bindReceiptSummaryPage,
+  },
+  "/receipt-analysis": {
+    path: "/receipt-analysis",
+    layout: "receipt-analysis",
+    title: "Аналіз чеку",
+    requiresAuth: true,
+    render: renderReceiptAnalysisPage,
+    bind: bindReceiptAnalysisPage,
   },
   "/products": {
     path: "/products",

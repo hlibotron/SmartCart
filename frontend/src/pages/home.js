@@ -4,10 +4,10 @@ import {
   metrics as fallbackMetrics,
   shortcuts,
 } from "../data/home.js";
-import { apiUrl, assetUrl, fetchJson, rerenderRoute } from "../shared/api.js";
-import { authHeaders } from "../shared/authSession.js";
+import { assetUrl, fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
 import { appHref } from "../shared/navigation.js";
+import { startReceiptScan } from "../shared/receiptScanSession.js";
 
 let homeData = {
   activities: fallbackActivities,
@@ -51,37 +51,6 @@ function setScanPending(isPending) {
 
   scanButton.disabled = isPending;
   scanButton.classList.toggle("is-loading", isPending);
-}
-
-async function uploadReceiptPhoto(file) {
-  const formData = new FormData();
-  formData.append("image", file);
-
-  const response = await fetch(apiUrl("/api/receipt-scans/upload"), {
-    method: "POST",
-    headers: {
-      ...authHeaders(),
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const details = await response.json().catch(() => null);
-    throw new Error(details?.detail || `Помилка сканування: ${response.status}`);
-  }
-
-  const result = await response.json();
-  const receiptId = result.receipt_id;
-  if (!receiptId) {
-    throw new Error("Сервер не повернув ID чеку");
-  }
-
-  window.history.pushState(
-    {},
-    "",
-    appHref(`/receipt-summary?receipt=${encodeURIComponent(receiptId)}`),
-  );
-  window.dispatchEvent(new Event("popstate"));
 }
 
 function renderMetric(metric) {
@@ -242,10 +211,21 @@ export function bindHomePage() {
     setScanStatus("Розпізнаємо чек...", "loading");
 
     try {
-      await uploadReceiptPhoto(file);
+      const scanPromise = startReceiptScan(file);
+      window.history.pushState({}, "", appHref("/receipt-analysis"));
+      window.dispatchEvent(new Event("popstate"));
+      const result = await scanPromise;
+      window.history.pushState(
+        {},
+        "",
+        appHref(`/receipt-summary?receipt=${encodeURIComponent(result.receipt_id)}`),
+      );
+      window.dispatchEvent(new Event("popstate"));
     } catch (error) {
       console.warn(error.message);
       setScanStatus(error.message || "Не вдалося розпізнати чек", "error");
+      window.history.pushState({}, "", appHref("/receipt-analysis"));
+      window.dispatchEvent(new Event("popstate"));
     } finally {
       setScanPending(false);
       event.target.value = "";
