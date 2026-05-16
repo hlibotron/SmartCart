@@ -11,6 +11,9 @@ Build Command: pip install -r requirements.txt
 Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
+The repository pins Python in `.python-version` to avoid Render's default
+runtime selecting a newer Python version before all pinned wheels support it.
+
 Environment variables:
 
 ```text
