@@ -12,8 +12,6 @@ let authState = {
 };
 let citySearchTimer = null;
 let citySearchRequest = 0;
-let citySuggestions = [];
-let citySearchShouldFocus = false;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -62,12 +60,70 @@ function fieldValue(name) {
 
 function renderCitySuggestions() {
   return `
-    <datalist id="authCityOptions">
-      ${citySuggestions
-        .map((item) => `<option value="${escapeHtml(item.label)}">${escapeHtml(item.regionName || "")}</option>`)
-        .join("")}
-    </datalist>
+    <div
+      class="auth-city-dropdown"
+      id="authCityDropdown"
+      role="listbox"
+      aria-label="Знайдені міста"
+      hidden
+    ></div>
   `;
+}
+
+function citySubtitle(item) {
+  return [item.communityName, item.regionName].filter(Boolean).join(" · ");
+}
+
+function renderCityDropdown(items, { loading = false, query = "" } = {}) {
+  const dropdown = document.querySelector("#authCityDropdown");
+  if (!dropdown) {
+    return;
+  }
+
+  if (loading) {
+    dropdown.innerHTML = `<span class="auth-city-status">Шукаємо міста...</span>`;
+    dropdown.hidden = false;
+    return;
+  }
+
+  if (!query.trim()) {
+    dropdown.innerHTML = "";
+    dropdown.hidden = true;
+    return;
+  }
+
+  if (!items.length) {
+    dropdown.innerHTML = `<span class="auth-city-status">Міст не знайдено</span>`;
+    dropdown.hidden = false;
+    return;
+  }
+
+  dropdown.innerHTML = items
+    .map(
+      (item) => `
+        <button
+          class="auth-city-option interactive"
+          type="button"
+          role="option"
+          data-city-label="${escapeHtml(item.label)}"
+        >
+          <strong>${escapeHtml(item.label)}</strong>
+          <small>${escapeHtml(citySubtitle(item))}</small>
+        </button>
+      `,
+    )
+    .join("");
+  dropdown.hidden = false;
+}
+
+function closeCityDropdown() {
+  const dropdown = document.querySelector("#authCityDropdown");
+  if (!dropdown) {
+    return;
+  }
+
+  dropdown.innerHTML = "";
+  dropdown.hidden = true;
 }
 
 export function renderAuthPage(mode = "login") {
@@ -109,18 +165,23 @@ export function renderAuthPage(mode = "login") {
         ${
           isRegister
             ? `
-              <label class="auth-field">
-                <span>Місто</span>
-                <input
-                  id="authCitySearch"
-                  name="city"
-                  type="text"
-                  autocomplete="address-level2"
-                  list="authCityOptions"
-                  value="${fieldValue("city")}"
-                />
-                ${renderCitySuggestions()}
-              </label>
+              <div class="auth-field auth-field--city">
+                <label id="authCityLabel" for="authCitySearch">Місто</label>
+                <span class="auth-city-control">
+                  <input
+                    id="authCitySearch"
+                    name="city"
+                    type="text"
+                    autocomplete="off"
+                    role="combobox"
+                    aria-labelledby="authCityLabel"
+                    aria-controls="authCityDropdown"
+                    aria-expanded="false"
+                    value="${fieldValue("city")}"
+                  />
+                  ${renderCitySuggestions()}
+                </span>
+              </div>
             `
             : ""
         }
@@ -150,42 +211,142 @@ export function renderRegisterPage() {
 
 export function bindAuthPage() {
   const cityInput = document.querySelector("#authCitySearch");
-  if (citySearchShouldFocus && cityInput) {
-    cityInput.focus({ preventScroll: true });
-    cityInput.setSelectionRange(cityInput.value.length, cityInput.value.length);
-    citySearchShouldFocus = false;
-  }
+  const cityDropdown = document.querySelector("#authCityDropdown");
 
   cityInput?.addEventListener("input", (event) => {
     const query = event.target.value.trim();
     window.clearTimeout(citySearchTimer);
+    authState = {
+      ...authState,
+      values: {
+        ...authState.values,
+        city: event.target.value,
+      },
+    };
+
+    if (!query) {
+      citySearchRequest += 1;
+      cityInput.setAttribute("aria-expanded", "false");
+      closeCityDropdown();
+      return;
+    }
+
+    renderCityDropdown([], { loading: true, query });
+    cityInput.setAttribute("aria-expanded", "true");
+    const requestId = ++citySearchRequest;
+
     citySearchTimer = window.setTimeout(() => {
-      const requestId = ++citySearchRequest;
       const params = new URLSearchParams({ level: "city", limit: "25" });
-      if (query) {
-        params.set("q", query);
-      }
+      params.set("q", query);
 
       fetchJson(`/api/business/geography-units?${params.toString()}`)
         .then((data) => {
           if (requestId !== citySearchRequest) {
             return;
           }
-          citySuggestions = Array.isArray(data.items) ? data.items : [];
-          authState = {
-            ...authState,
-            values: {
-              ...authState.values,
-              city: cityInput.value,
-            },
-          };
-          citySearchShouldFocus = true;
-          window.dispatchEvent(new Event("popstate"));
+
+          const items = Array.isArray(data.items) ? data.items : [];
+          renderCityDropdown(items, { query });
+          cityInput.setAttribute("aria-expanded", "true");
         })
         .catch((error) => {
           console.warn(error.message);
+          if (requestId === citySearchRequest) {
+            closeCityDropdown();
+            cityInput.setAttribute("aria-expanded", "false");
+          }
         });
     }, 220);
+  });
+
+  cityInput?.addEventListener("keydown", (event) => {
+    const options = Array.from(document.querySelectorAll(".auth-city-option"));
+    if (event.key === "Escape") {
+      closeCityDropdown();
+      cityInput.setAttribute("aria-expanded", "false");
+      return;
+    }
+
+    if (event.key !== "ArrowDown" || !options.length) {
+      return;
+    }
+
+    event.preventDefault();
+    options[0].focus();
+  });
+
+  cityDropdown?.addEventListener("keydown", (event) => {
+    const options = Array.from(cityDropdown.querySelectorAll(".auth-city-option"));
+    const activeIndex = options.indexOf(document.activeElement);
+
+    if (event.key === "Escape") {
+      closeCityDropdown();
+      cityInput?.setAttribute("aria-expanded", "false");
+      cityInput?.focus();
+      return;
+    }
+
+    if (!["ArrowDown", "ArrowUp"].includes(event.key)) {
+      return;
+    }
+
+    event.preventDefault();
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    const nextIndex = (activeIndex + direction + options.length) % options.length;
+    options[nextIndex]?.focus();
+  });
+
+  cityDropdown?.addEventListener("click", (event) => {
+    const option = event.target instanceof Element
+      ? event.target.closest(".auth-city-option")
+      : null;
+    if (!option || !cityInput) {
+      return;
+    }
+
+    cityInput.value = option.dataset.cityLabel || "";
+    authState = {
+      ...authState,
+      values: {
+        ...authState.values,
+        city: cityInput.value,
+      },
+    };
+    closeCityDropdown();
+    cityInput.setAttribute("aria-expanded", "false");
+    cityInput.focus();
+  });
+
+  cityInput?.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      if (cityDropdown?.contains(document.activeElement)) {
+        return;
+      }
+
+      closeCityDropdown();
+      cityInput.setAttribute("aria-expanded", "false");
+    }, 0);
+  });
+
+  cityDropdown?.addEventListener("focusout", () => {
+    window.setTimeout(() => {
+      if (cityDropdown.contains(document.activeElement) || cityInput === document.activeElement) {
+        return;
+      }
+
+      closeCityDropdown();
+      cityInput?.setAttribute("aria-expanded", "false");
+    }, 0);
+  });
+
+  cityDropdown?.addEventListener("pointerdown", (event) => {
+    const option = event.target instanceof Element
+      ? event.target.closest(".auth-city-option")
+      : null;
+    if (option) {
+      event.preventDefault();
+      return;
+    }
   });
 
   document.querySelector("#authForm")?.addEventListener("submit", async (event) => {

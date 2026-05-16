@@ -93,10 +93,19 @@ export const routes = {
   "/cashback": {
     path: "/cashback",
     navPath: "/",
-    title: "Кешбек",
+    title: "Керування кешбеком",
     requiresAuth: true,
     render: renderCashbackPage,
     bind: bindCashbackPage,
+  },
+  "/profile/payout": {
+    path: "/profile/payout",
+    navPath: "/profile",
+    backPath: "/cashback",
+    title: "Спосіб виплати",
+    requiresAuth: true,
+    render: renderProfilePage,
+    bind: bindProfilePage,
   },
   "/profile": {
     path: "/profile",

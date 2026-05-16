@@ -252,6 +252,7 @@ function buildPriceDataFromComparison(data, sourceKey = selectedPriceSource) {
           : `Для режиму “${sourceKey === "receipt" ? "Чеки користувачів" : "Офіційні сайти"}” ще немає цін за обраний період.`,
     },
     selectedProduct: {
+      id: product.id ?? null,
       name: product.name || fallbackSelectedProduct.name,
       description: product.brand || product.category?.name || "Товар з бази",
       price: productHeaderPrice?.price || "₴0",
@@ -593,13 +594,14 @@ export function bindProductPricePage() {
 
   document.querySelectorAll(".store-price-row").forEach((row) => {
     row.addEventListener("click", () => {
-      if (!requestedProductId) {
-        console.log("Open store price:", row.dataset.storeName);
+      const mapProductId = requestedProductId || priceData.selectedProduct.id;
+      if (!mapProductId) {
+        console.warn("Cannot open stores map without product id:", row.dataset.storeName);
         return;
       }
 
       const params = new URLSearchParams({
-        productId: requestedProductId,
+        productId: mapProductId,
         retailer: retailerKeyFromName(row.dataset.storeName || ""),
       });
       window.history.pushState({}, "", appHref(`/stores-map?${params.toString()}`));

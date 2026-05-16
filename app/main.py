@@ -15,7 +15,7 @@ import time
 from urllib.parse import quote
 import uuid
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
@@ -549,39 +549,17 @@ async def cashback_overview(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(optional_current_user),
 ):
-    receipts_query = select(Receipt).options(selectinload(Receipt.items))
-    if current_user is not None:
-        receipts_query = receipts_query.where(Receipt.user_id == current_user.id)
-    receipts_result = await db.execute(receipts_query)
-    receipts = receipts_result.scalars().all()
-
-    receipt_store_cashback = sum(
-        (
-            to_decimal(receipt.store_cashback_total)
-            or sum((to_decimal(item.store_cashback_amount) for item in receipt.items), Decimal("0"))
-            for receipt in receipts
-        ),
-        Decimal("0"),
-    )
+    receipts = await fetch_cashback_receipts(db, current_user)
+    receipt_store_cashback = sum((receipt_store_cashback_amount(receipt) for receipt in receipts), Decimal("0"))
     receipt_smartcart_cashback = sum(
-        (
-            to_decimal(receipt.smartcart_cashback_total)
-            or sum((to_decimal(item.smartcart_cashback_amount) for item in receipt.items), Decimal("0"))
-            for receipt in receipts
-        ),
+        (receipt_smartcart_cashback_amount(receipt) for receipt in receipts),
         Decimal("0"),
     )
     expected_cashback = receipt_store_cashback + receipt_smartcart_cashback
     cashback_receipts = [
         receipt
         for receipt in receipts
-        if to_decimal(receipt.store_cashback_total) > 0
-        or to_decimal(receipt.smartcart_cashback_total) > 0
-        or any(
-            to_decimal(item.store_cashback_amount) > 0
-            or to_decimal(item.smartcart_cashback_amount) > 0
-            for item in receipt.items
-        )
+        if receipt_cashback_amount(receipt) > 0
     ]
 
     offer_result = await db.execute(
@@ -630,6 +608,47 @@ async def cashback_overview(
             {"label": "SmartCart", "value": money(receipt_smartcart_cashback), "icon": "cashback"},
         ],
         "offers": offers,
+    }
+
+
+@app.get("/cashback/summary")
+@app.get("/api/cashback/summary")
+async def cashback_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
+    receipts = await fetch_cashback_receipts(db, current_user)
+    return {"summary": cashback_summary_payload(receipts, current_user)}
+
+
+@app.get("/cashback/history")
+@app.get("/api/cashback/history")
+async def cashback_history(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
+    receipts = await fetch_cashback_receipts(db, current_user)
+    return {"items": cashback_history_payload(receipts)}
+
+
+@app.patch("/cashback/settings")
+@app.patch("/api/cashback/settings")
+async def cashback_settings(
+    payload: dict | None = Body(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    enabled = bool((payload or {}).get("auto_activation_enabled", True))
+    current_user.cashback_auto_activation_enabled = enabled
+    db.add(current_user)
+    await db.commit()
+
+    return {
+        "auto_activation_enabled": enabled,
+        "autoActivationEnabled": enabled,
     }
 
 
@@ -824,6 +843,12 @@ def cashback_money(value, currency: str | None = "UAH") -> str | None:
     return f"+{money(amount, currency)}"
 
 
+def signed_cashback_money(value, currency: str | None = "UAH") -> str:
+    amount = to_decimal(value)
+    prefix = "+" if amount > 0 else ""
+    return f"{prefix}{money(amount, currency)}"
+
+
 def nullable_money(value, currency: str | None = "UAH") -> str | None:
     amount = to_decimal(value)
     if amount <= 0:
@@ -860,6 +885,27 @@ def receipt_date(receipt: Receipt) -> datetime:
 def ui_datetime(value: datetime | None) -> str:
     date = value or datetime.utcnow()
     return date.strftime("%d.%m.%Y · %H:%M")
+
+
+UKRAINIAN_MONTHS_GENITIVE = [
+    "січня",
+    "лютого",
+    "березня",
+    "квітня",
+    "травня",
+    "червня",
+    "липня",
+    "серпня",
+    "вересня",
+    "жовтня",
+    "листопада",
+    "грудня",
+]
+
+
+def ui_day_month(value: datetime | None) -> str:
+    date = value or datetime.utcnow()
+    return f"{date.day:02d} {UKRAINIAN_MONTHS_GENITIVE[date.month - 1]}"
 
 
 def period_cutoff(period: str) -> datetime:
@@ -1086,6 +1132,143 @@ def receipt_word(count: int) -> str:
     if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
         return "чеки"
     return "чеків"
+
+
+async def fetch_cashback_receipts(
+    db: AsyncSession,
+    current_user: User | None,
+) -> list[Receipt]:
+    if current_user is None:
+        return []
+
+    result = await db.execute(
+        select(Receipt)
+        .options(selectinload(Receipt.items).selectinload(ReceiptItem.product))
+        .where(Receipt.user_id == current_user.id)
+        .order_by(Receipt.receipt_datetime.desc().nullslast(), Receipt.created_at.desc())
+    )
+    return result.scalars().all()
+
+
+def receipt_store_cashback_amount(receipt: Receipt) -> Decimal:
+    return to_decimal(receipt.store_cashback_total) or sum(
+        (to_decimal(item.store_cashback_amount) for item in receipt.items),
+        Decimal("0"),
+    )
+
+
+def receipt_smartcart_cashback_amount(receipt: Receipt) -> Decimal:
+    return to_decimal(receipt.smartcart_cashback_total) or sum(
+        (to_decimal(item.smartcart_cashback_amount) for item in receipt.items),
+        Decimal("0"),
+    )
+
+
+def receipt_cashback_amount(receipt: Receipt) -> Decimal:
+    return receipt_store_cashback_amount(receipt) + receipt_smartcart_cashback_amount(receipt)
+
+
+def cashback_status_for_receipt(receipt: Receipt) -> str:
+    return "credited" if (receipt.processing_status or "").lower() == "processed" else "pending"
+
+
+def cashback_status_label(status: str) -> str:
+    return "Очікує" if status == "pending" else "Зараховано"
+
+
+def cashback_history_item_payload(
+    *,
+    item: ReceiptItem | None,
+    receipt: Receipt,
+    amount: Decimal,
+    index: int,
+) -> dict:
+    status = cashback_status_for_receipt(receipt)
+    visual = product_visual_payload(item) if item else None
+    title = item.item_name if item else f"Кешбек {display_store_name(receipt.store)}"
+
+    return {
+        "id": f"receipt-{receipt.id}-item-{item.id if item else index}",
+        "type": "cashback",
+        "title": title,
+        "date": ui_day_month(receipt_date(receipt)),
+        "amount": signed_cashback_money(amount, receipt.currency),
+        "amountValue": float(amount),
+        "status": status,
+        "statusLabel": cashback_status_label(status),
+        "icon": visual["thumb"] if visual else "cashback",
+        "image": visual["url"] if visual else None,
+        "receiptId": receipt.id,
+        "productId": item.product_id if item else None,
+    }
+
+
+def cashback_history_payload(receipts: list[Receipt]) -> list[dict]:
+    history = []
+    for receipt in receipts:
+        item_rows = []
+        for item in receipt.items:
+            amount = to_decimal(item.store_cashback_amount) + to_decimal(item.smartcart_cashback_amount)
+            if amount > 0:
+                item_rows.append((item, amount))
+
+        if item_rows:
+            for item, amount in item_rows:
+                history.append(
+                    cashback_history_item_payload(
+                        item=item,
+                        receipt=receipt,
+                        amount=amount,
+                        index=len(history),
+                    )
+                )
+            continue
+
+        receipt_amount = receipt_cashback_amount(receipt)
+        if receipt_amount > 0:
+            history.append(
+                cashback_history_item_payload(
+                    item=None,
+                    receipt=receipt,
+                    amount=receipt_amount,
+                    index=len(history),
+                )
+            )
+
+    return history
+
+
+def cashback_summary_payload(receipts: list[Receipt], current_user: User | None) -> dict:
+    available = Decimal("0")
+    pending = Decimal("0")
+
+    for receipt in receipts:
+        amount = receipt_cashback_amount(receipt)
+        if amount <= 0:
+            continue
+
+        if cashback_status_for_receipt(receipt) == "credited":
+            available += amount
+        else:
+            pending += amount
+
+    payout_method_label = current_user.payout_method_label if current_user else None
+    auto_activation_enabled = (
+        bool(current_user.cashback_auto_activation_enabled)
+        if current_user and current_user.cashback_auto_activation_enabled is not None
+        else True
+    )
+
+    return {
+        "available_balance": money(available),
+        "availableBalance": money(available),
+        "pending_balance": money(pending),
+        "pendingBalance": money(pending),
+        "auto_activation_enabled": auto_activation_enabled,
+        "autoActivationEnabled": auto_activation_enabled,
+        "payout_method": {"label": payout_method_label} if payout_method_label else None,
+        "payoutMethodLabel": payout_method_label or "Не додано",
+    }
 
 
 def percent_change(current: Decimal, previous: Decimal) -> Decimal:
@@ -3984,6 +4167,10 @@ async def product_prices(
     db: AsyncSession = Depends(get_db),
 ):
     since = period_cutoff(period)
+    product_result = await db.execute(
+        select(Product).where(func.lower(Product.name) == product_name.lower())
+    )
+    product = product_result.scalar_one_or_none()
     stmt = (
         select(ReceiptItem, Receipt)
         .join(Receipt, ReceiptItem.receipt_id == Receipt.id)
@@ -3998,6 +4185,7 @@ async def product_prices(
     if not rows:
         return {
             "selectedProduct": {
+                "id": product.id if product else None,
                 "name": product_name,
                 "description": "Немає даних за обраний період",
                 "price": money(0),
@@ -4018,6 +4206,10 @@ async def product_prices(
         }
 
     latest_item, latest_receipt = max(rows, key=lambda row: receipt_date(row[1]))
+    selected_product_id = latest_item.product_id or next(
+        (item.product_id for item, _ in rows if item.product_id),
+        product.id if product else None,
+    )
     visual = product_visual_payload(latest_item)
     prices = [to_decimal(item.price) for item, _ in rows]
     min_price = min(prices)
@@ -4069,6 +4261,7 @@ async def product_prices(
 
     return {
         "selectedProduct": {
+            "id": selected_product_id,
             "name": latest_item.item_name,
             "description": latest_item.brand or latest_item.category or "Товар з чеків",
             "price": money(latest_item.price, latest_receipt.currency),

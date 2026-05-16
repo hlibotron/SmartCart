@@ -31,6 +31,8 @@ class User(Base):
     city = Column(String(120))
     level = Column(String(80), default="Базовий рівень")
     avatar_url = Column(Text)
+    cashback_auto_activation_enabled = Column(Boolean, default=True)
+    payout_method_label = Column(String(120))
 
     created_at = Column(TIMESTAMP, server_default=func.now())
 

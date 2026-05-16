@@ -11,6 +11,8 @@ ADDITIVE_COLUMNS = {
         ("city", "VARCHAR(120)"),
         ("level", "VARCHAR(80) DEFAULT 'Базовий рівень'"),
         ("avatar_url", "TEXT"),
+        ("cashback_auto_activation_enabled", "BOOLEAN DEFAULT TRUE"),
+        ("payout_method_label", "VARCHAR(120)"),
     ],
     "receipts": [
         ("total_discount", "NUMERIC(10, 2) DEFAULT 0"),

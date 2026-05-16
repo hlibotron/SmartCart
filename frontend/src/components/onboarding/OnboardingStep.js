@@ -1,4 +1,4 @@
-import receiptPhoneUrl from "../../assets/onboarding/receipt-phone.png";
+import onboardingFirstPageUrl from "../../assets/onboarding/onboarding-first-page.png";
 import { icon } from "../../shared/icons.js";
 import { appHref } from "../../shared/navigation.js";
 
@@ -25,11 +25,8 @@ function renderTitle(title) {
 
 function renderIntroStep() {
   return `
-    <div class="onboarding-visual" aria-label="Телефон із відсканованим чеком">
-      <span class="onboarding-badge onboarding-badge--analytics">${icon("analytics")}</span>
-      <span class="onboarding-badge onboarding-badge--percent">%</span>
-      <span class="onboarding-badge onboarding-badge--bag">${icon("shoppingBag")}</span>
-      <img src="${receiptPhoneUrl}" alt="Телефон із чеком у руці" />
+    <div class="onboarding-first-page">
+      <img src="${onboardingFirstPageUrl}" alt="Перший екран SmartCart" />
     </div>
   `;
 }

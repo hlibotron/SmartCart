@@ -101,6 +101,20 @@
   padding: 22px 0;
 }
 
+.onboarding-first-page {
+  display: grid;
+  width: 100%;
+  place-items: center;
+}
+
+.onboarding-first-page img {
+  display: block;
+  width: min(112%, 480px);
+  height: auto;
+  border-radius: 0;
+  object-fit: contain;
+}
+
 .onboarding-actions {
   margin-top: auto;
   padding-top: 12px;

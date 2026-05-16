@@ -22,6 +22,8 @@ const icons = {
   chevron: '<path d="m9 18 6-6-6-6" />',
   chevronDown: '<path d="m6 9 6 6 6-6" />',
   clock: '<circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />',
+  coffee:
+    '<path d="M7 8h10v7a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V8h2Z" /><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17" /><path d="M8 3v2M12 3v2M16 3v2" />',
   creditCard:
     '<rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h3" />',
   dashboard: '<rect x="4" y="4" width="6" height="6" rx="1.4" /><rect x="14" y="4" width="6" height="6" rx="1.4" /><rect x="4" y="14" width="6" height="6" rx="1.4" /><rect x="14" y="14" width="6" height="6" rx="1.4" />',
@@ -75,6 +77,8 @@ const icons = {
     '<rect x="3" y="6" width="18" height="13" rx="3" /><path d="M17 11h4v4h-4a2 2 0 0 1 0-4ZM7 9h7" />',
   wifi:
     '<path d="M2.7 8.6C7.8 4.2 16.2 4.2 21.3 8.6" /><path d="M6.4 12.1c3.2-2.7 8-2.7 11.2 0" /><path d="M10 15.7c1.1-.8 2.9-.8 4 0" /><path d="M12 19h.01" />',
+  yogurt:
+    '<path d="M7 7h10l-1 13a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2L7 7Z" /><path d="M8 3h8l1 4H7l1-4Z" /><path d="M9 12c1.4 1 4.6 1 6 0" />',
 };
 
 export function icon(name, className = "") {
