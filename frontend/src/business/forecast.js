@@ -29,16 +29,25 @@ function linePath(points, getValue, min, max) {
     .join(" ");
 }
 
-async function fetchPricing(params = {}) {
+const _pricingCache = new Map();
+
+async function fetchPricing(params = {}, options = {}) {
   const qs = new URLSearchParams({
     price:      params.price      ?? 50,
     comp_price: params.comp_price ?? 50,
     loyalty:    params.loyalty    ?? 8,
     days:       params.days       ?? 7,
   });
-  const res = await fetch(apiUrl(`/api/forecast/pricing?${qs}`));
+  const cacheKey = qs.toString();
+  if (_pricingCache.has(cacheKey)) return _pricingCache.get(cacheKey);
+
+  const res = await fetch(apiUrl(`/api/forecast/pricing?${qs}`), {
+    signal: options.signal,
+  });
   if (!res.ok) throw new Error("pricing fetch failed");
-  return res.json();
+  const data = await res.json();
+  _pricingCache.set(cacheKey, data);
+  return data;
 }
 
 async function fetchMarket(params = {}) {
@@ -114,6 +123,8 @@ let _market  = null;
 let _trend = null;
 let _loading = false;
 let _brandImpact = null;
+let _pricingRequestController = null;
+let _refreshSeq = 0;
 
 const _brandParams = { store: "АТБ", brand: "Coca-Cola" };
 const _pricingParams = { price: 50, comp_price: 50, loyalty: 8, days: 7 };
@@ -644,7 +655,9 @@ function _scheduleRefresh() {
 }
 
 async function _doRefresh() {
-  if (_loading) return;
+  const seq = ++_refreshSeq;
+  if (_pricingRequestController) _pricingRequestController.abort();
+  _pricingRequestController = new AbortController();
   _loading = true;
 
   const statusEl = document.getElementById("forecast-status");
@@ -656,31 +669,52 @@ async function _doRefresh() {
   _pricingParams.days       = parseInt(document.getElementById("ctrl-days")?.value      ?? 7);
 
   try {
-    _pricing = await fetchPricing(_pricingParams);
+    const pricing = await fetchPricing(_pricingParams, {
+      signal: _pricingRequestController.signal,
+    });
+    if (seq !== _refreshSeq) return;
+    _pricing = pricing;
   } catch (e) {
+    if (e.name === "AbortError") return;
     console.error("[forecast] refresh error:", e);
     if (statusEl) statusEl.textContent = "Помилка оновлення";
-    _loading = false;
     return;
+  } finally {
+    if (seq === _refreshSeq) _loading = false;
   }
 
-  const kpisWrap = document.getElementById("forecast-kpis");
-  if (kpisWrap) kpisWrap.innerHTML = renderBusinessKpiCards(buildKpis(), "Ключові показники прогнозу та еластичності");
+  if (seq !== _refreshSeq) return;
 
-  const row1 = document.getElementById("forecast-row-1");
-  if (row1) row1.innerHTML = renderElasticityChart() + renderProductDetails();
-
-  const row2 = document.getElementById("forecast-row-2");
-  if (row2) row2.innerHTML = renderBrandImpactChart() + renderBrandImpactStats();
-
-  const row3 = document.getElementById("forecast-row-3");
-  if (row3) row3.innerHTML = renderTrafficTrendChart(_trend?.data) + renderPriceComparison();
+  _renderForecastKpis();
+  _renderPricingRegion();
 
   if (statusEl) { statusEl.textContent = ""; statusEl.style.opacity = "0"; }
-  _loading = false;
 }
 
 window._forecastUpdate = _scheduleRefresh;
+
+function _renderForecastKpis() {
+  const kpis = buildKpis();
+  if (!kpis.length) return;
+
+  const kpisWrap = document.getElementById("forecast-kpis");
+  if (kpisWrap) kpisWrap.innerHTML = renderBusinessKpiCards(kpis, "Ключові показники прогнозу та еластичності");
+}
+
+function _renderPricingRegion() {
+  const row1 = document.getElementById("forecast-row-1");
+  if (row1) row1.innerHTML = renderElasticityChart() + renderProductDetails();
+}
+
+function _renderBrandRegion() {
+  const row2 = document.getElementById("forecast-row-2");
+  if (row2) row2.innerHTML = renderBrandImpactChart() + renderBrandImpactStats();
+}
+
+function _renderMarketTrendRegion() {
+  const row3 = document.getElementById("forecast-row-3");
+  if (row3) row3.innerHTML = renderTrafficTrendChart(_trend?.data) + renderPriceComparison();
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -733,28 +767,36 @@ export function renderBusinessForecastPage() {
 export async function bindBusinessForecastPage() {
   bindBusinessMockLinks();
 
-  try {
-    [_pricing, _market, _trend, _brandImpact] = await Promise.all([
-      fetchPricing(_pricingParams),
-      fetchMarket(_marketParams),
-      fetchTrend(_marketParams.store),
-      fetchBrandImpact(_brandParams.store, _brandParams.brand)
-    ]);
-  } catch (err) {
-    console.error("[forecast] API error:", err);
-    return;
-  }
+  const pricingPromise = fetchPricing(_pricingParams)
+    .then((data) => {
+      _pricing = data;
+      _renderPricingRegion();
+      _renderForecastKpis();
+    })
+    .catch((err) => console.error("[forecast] pricing API error:", err));
 
-  const kpisWrap = document.getElementById("forecast-kpis");
-  if (kpisWrap) kpisWrap.innerHTML = renderBusinessKpiCards(buildKpis(), "Ключові показники прогнозу та еластичності");
+  const marketPromise = fetchMarket(_marketParams)
+    .then((data) => {
+      _market = data;
+      _renderMarketTrendRegion();
+      _renderForecastKpis();
+    })
+    .catch((err) => console.error("[forecast] market API error:", err));
 
-  const row1 = document.getElementById("forecast-row-1");
-  if (row1) row1.innerHTML = renderElasticityChart() + renderProductDetails();
+  const trendPromise = fetchTrend(_marketParams.store)
+    .then((data) => {
+      _trend = data;
+      _renderMarketTrendRegion();
+    })
+    .catch((err) => console.error("[forecast] trend API error:", err));
 
-  const row2 = document.getElementById("forecast-row-2");
-  if (row2) row2.innerHTML = renderBrandImpactChart() + renderBrandImpactStats();
+  const brandPromise = fetchBrandImpact(_brandParams.store, _brandParams.brand)
+    .then((data) => {
+      _brandImpact = data;
+      _renderBrandRegion();
+      _renderForecastKpis();
+    })
+    .catch((err) => console.error("[forecast] brand API error:", err));
 
-  const row3 = document.getElementById("forecast-row-3");
-  if (row3) row3.innerHTML = renderTrafficTrendChart(_trend?.data) + renderPriceComparison();
-
+  await Promise.allSettled([pricingPromise, marketPromise, trendPromise, brandPromise]);
 }

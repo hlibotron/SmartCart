@@ -14,6 +14,8 @@ GET /api/forecast/market
 from __future__ import annotations
 
 import os
+import time
+from threading import Lock
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
@@ -33,19 +35,28 @@ router = APIRouter(prefix="/forecast", tags=["forecast"])
 
 
 _model = None
+_model_lock = Lock()
 _MODEL_PATH=Path(os.getenv("XGB_MODEL_PATH", "analytics/xgb_pricing_model.pkl")).resolve()
 
 def _load_model():
     global _model
     if _model is None:
-        try:
-            print(f"🔄 Пробуем загрузить модель по пути: {_MODEL_PATH}")
-            _model = joblib.load(_MODEL_PATH)
-            print("✅ Модель XGBoost успешно загружена!")
-        except Exception as e:
-            print(f"❌ Ошибка загрузки ML-модели: {type(e).__name__} - {e}")
-            _model = None
+        with _model_lock:
+            if _model is None:
+                try:
+                    start = time.perf_counter()
+                    print(f"🔄 Пробуем загрузить модель по пути: {_MODEL_PATH}")
+                    _model = joblib.load(_MODEL_PATH)
+                    elapsed_ms = (time.perf_counter() - start) * 1000
+                    print(f"✅ Модель XGBoost успешно загружена за {elapsed_ms:.0f} мс!")
+                except Exception as e:
+                    print(f"❌ Ошибка загрузки ML-модели: {type(e).__name__} - {e}")
+                    _model = None
     return _model
+
+def warm_forecast_model():
+    """Load the pricing model during app startup to avoid first-request latency."""
+    return _load_model()
 
 
 @router.get("/pricing")
@@ -63,29 +74,29 @@ def forecast_pricing(
 
     model = _load_model()
     test_prices = np.linspace(price * 0.8, price * 1.3, 30)
+    rpis = test_prices / comp_price
+    price_gaps = test_prices - comp_price
+
+    if model is not None:
+        try:
+            features = pd.DataFrame({
+                "our_price": test_prices,
+                "competitor_price": np.full(test_prices.shape, comp_price),
+                "rpi": rpis,
+                "price_gap": price_gaps,
+                "days_since_last_purchase": np.full(test_prices.shape, days),
+                "user_loyalty": np.full(test_prices.shape, loyalty),
+            })
+            probabilities = model.predict_proba(features)[:, 1].astype(float)
+        except Exception:
+            probabilities = np.array([_analytical_prob(rpi, loyalty, days) for rpi in rpis], dtype=float)
+    else:
+        probabilities = np.array([_analytical_prob(rpi, loyalty, days) for rpi in rpis], dtype=float)
+
     elasticity_points = []
     revenue_points = []
 
-    for p in test_prices:
-        rpi = p / comp_price
-        price_gap = p - comp_price
-
-        if model is not None:
-            try:
-                features = pd.DataFrame([{
-                    "our_price": p,
-                    "competitor_price": comp_price,
-                    "rpi": rpi,
-                    "price_gap": price_gap,
-                    "days_since_last_purchase": days,
-                    "user_loyalty": loyalty,
-                }])
-                prob_buy = float(model.predict_proba(features)[0][1])
-            except Exception:
-                prob_buy = _analytical_prob(rpi, loyalty, days)
-        else:
-            prob_buy = _analytical_prob(rpi, loyalty, days)
-
+    for p, rpi, prob_buy in zip(test_prices, rpis, probabilities):
         if rpi > 1.4:
             prob_buy = prob_buy * (1.4 / rpi) ** 5
 

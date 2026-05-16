@@ -89,6 +89,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def ensure_database_schema():
+    forecast_router.warm_forecast_model()
     await ensure_schema(engine)
 
 
