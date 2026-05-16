@@ -1,6 +1,7 @@
 .analytics-page h1 {
-  margin-bottom: 22px;
-  font-size: 40px;
+  margin-bottom: 18px;
+  font-size: 36px;
+  line-height: 1;
 }
 
 .analytics-periods {
@@ -20,7 +21,7 @@
   border-radius: 13px;
   background: transparent;
   color: #5f6675;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 750;
   cursor: pointer;
 }
@@ -52,7 +53,7 @@
 
 .analytics-card-heading h2 {
   color: #101322;
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 850;
   line-height: 1.15;
 }
@@ -72,23 +73,23 @@
 
 .analytics-chart-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.98fr) minmax(0, 1.02fr);
-  gap: 14px;
+  grid-template-columns: 1fr;
+  gap: 16px;
   align-items: center;
   margin-top: 18px;
 }
 
 .analytics-donut-wrap {
   display: grid;
-  grid-template-columns: minmax(136px, 220px) minmax(96px, auto);
-  gap: 14px;
+  grid-template-columns: minmax(148px, 176px) minmax(0, 1fr);
+  gap: 12px;
   align-items: center;
   justify-content: center;
 }
 
 .analytics-donut {
   position: relative;
-  width: min(100%, 220px);
+  width: min(100%, 176px);
   aspect-ratio: 1;
   border-radius: 50%;
   background: conic-gradient(var(--donut-gradient));
@@ -98,7 +99,7 @@
 .analytics-donut::before {
   content: "";
   position: absolute;
-  inset: 36px;
+  inset: 30px;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 0 0 1px rgba(229, 231, 235, 0.55);
@@ -112,7 +113,7 @@
   gap: 3px;
   min-width: 0;
   text-align: left;
-  padding-left: 12px;
+  padding-left: 4px;
 }
 
 .analytics-donut-center strong {
@@ -130,12 +131,13 @@
 
 .analytics-legend {
   display: grid;
-  gap: 13px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
 }
 
 .analytics-legend-row {
   display: grid;
-  grid-template-columns: 10px minmax(0, 0.9fr) auto;
+  grid-template-columns: 10px minmax(0, 1fr);
   align-items: center;
   gap: 9px;
   color: #101322;
@@ -156,8 +158,9 @@
 }
 
 .analytics-legend-row strong {
+  grid-column: 2;
   color: #101322;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -170,13 +173,13 @@
 
 .analytics-table {
   margin-top: 18px;
-  --analytics-table-columns: 44px minmax(0, 0.36fr) minmax(72px, 0.48fr) minmax(44px, 0.34fr) 18px;
-  --analytics-table-gap: 9px;
+  --analytics-table-columns: 38px minmax(0, 0.78fr) minmax(70px, 0.44fr) minmax(40px, 0.28fr) 16px;
+  --analytics-table-gap: 7px;
   --analytics-table-row-min-height: 58px;
   --analytics-table-row-padding: 8px 4px;
-  --analytics-table-icon-size: 44px;
-  --analytics-table-icon-svg-size: 23px;
-  --analytics-table-chevron-size: 18px;
+  --analytics-table-icon-size: 38px;
+  --analytics-table-icon-svg-size: 20px;
+  --analytics-table-chevron-size: 16px;
 }
 
 .analytics-table-head,
@@ -252,8 +255,8 @@
 .analytics-category-name strong {
   overflow: hidden;
   color: #101322;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 750;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -271,8 +274,8 @@
 .analytics-category-amount,
 .analytics-percent-pill {
   color: #101322;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 750;
   text-align: center;
   white-space: nowrap;
 }
@@ -415,8 +418,8 @@
 .analytics-category-page h1 {
   margin-bottom: 22px;
   color: #101322;
-  font-size: 36px;
-  font-weight: 850;
+  font-size: 28px;
+  font-weight: 650;
   line-height: 1.05;
 }
 
@@ -485,13 +488,13 @@
 .analytics-category-hero-total strong {
   color: var(--green-dark);
   font-size: 24px;
-  font-weight: 900;
+  font-weight: 700;
   line-height: 1;
 }
 
 .analytics-category-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -532,11 +535,12 @@
   white-space: nowrap;
 }
 
+
 .analytics-category-stat strong {
   overflow: hidden;
   color: #101322;
   font-size: 18px;
-  font-weight: 850;
+  font-weight: 650;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -705,7 +709,7 @@
 .analytics-category-receipt-row > strong {
   color: #101322;
   font-size: 17px;
-  font-weight: 850;
+  font-weight: 650;
   line-height: 1;
   white-space: nowrap;
 }
@@ -776,7 +780,7 @@
 
   .analytics-donut-wrap {
     grid-template-columns: minmax(128px, 176px) minmax(90px, auto);
-    gap: 12px;
+
   }
 
   .analytics-donut {

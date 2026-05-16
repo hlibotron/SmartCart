@@ -1,4 +1,18 @@
-from sqlalchemy import Column, Integer, BigInteger, String, Text, Numeric, ForeignKey, TIMESTAMP, Boolean
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    Date,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    TIMESTAMP,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -12,6 +26,11 @@ class User(Base):
 
     telegram_id = Column(BigInteger, unique=True, nullable=False)
     username = Column(String(255))
+    email = Column(String(255), unique=True)
+    password_hash = Column(String(255))
+    city = Column(String(120))
+    level = Column(String(80), default="Базовий рівень")
+    avatar_url = Column(Text)
 
     created_at = Column(TIMESTAMP, server_default=func.now())
 
@@ -122,6 +141,66 @@ class Store(Base):
     cashback_offers = relationship("CashbackOffer", back_populates="store")
     aliases = relationship("ProductAlias", back_populates="store")
     listings = relationship("ProductListing", back_populates="store")
+
+
+class RetailStoreLocation(Base):
+    __tablename__ = "retail_store_locations"
+    __table_args__ = (
+        UniqueConstraint(
+            "chain_key",
+            "city",
+            "address_raw",
+            name="uq_retail_store_locations_chain_city_address",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    chain_key = Column(String(80), nullable=False)
+    chain_name = Column(String(255), nullable=False)
+    store_name = Column(String(255))
+    city = Column(String(120), nullable=False, default="Київ")
+    address_raw = Column(Text, nullable=False)
+    address_query = Column(Text, nullable=False)
+    lat = Column(Float)
+    lon = Column(Float)
+    coordinate_status = Column(String(80), nullable=False, default="needs_geocode")
+    source_type = Column(String(120))
+    source_name = Column(Text)
+    source_url = Column(Text)
+    coverage_note = Column(Text)
+    chain_completeness = Column(String(120))
+    fetched_at = Column(Date)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+
+Index("ix_retail_store_locations_chain", RetailStoreLocation.chain_key)
+Index("ix_retail_store_locations_city", RetailStoreLocation.city)
+Index("ix_retail_store_locations_coordinates", RetailStoreLocation.lat, RetailStoreLocation.lon)
+
+
+class AdminGeoUnit(Base):
+    __tablename__ = "admin_geo_units"
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(32), unique=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    level = Column(String(30), nullable=False)
+    type_name = Column(String(100))
+    parent_code = Column(String(32))
+    region_code = Column(String(32))
+    region_name = Column(String(255))
+    community_code = Column(String(32))
+    community_name = Column(String(255))
+    search_text = Column(Text, nullable=False)
+    source = Column(String(100), default="katottg")
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+
+Index("ix_admin_geo_units_level_name", AdminGeoUnit.level, AdminGeoUnit.name)
+Index("ix_admin_geo_units_region", AdminGeoUnit.region_code)
+Index("ix_admin_geo_units_community", AdminGeoUnit.community_code)
 
 
 class ProductListing(Base):

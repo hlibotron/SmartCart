@@ -5,6 +5,13 @@ from app.db.database import Base
 
 
 ADDITIVE_COLUMNS = {
+    "users": [
+        ("email", "VARCHAR(255) UNIQUE"),
+        ("password_hash", "VARCHAR(255)"),
+        ("city", "VARCHAR(120)"),
+        ("level", "VARCHAR(80) DEFAULT 'Базовий рівень'"),
+        ("avatar_url", "TEXT"),
+    ],
     "receipts": [
         ("total_discount", "NUMERIC(10, 2) DEFAULT 0"),
         ("store_cashback_total", "NUMERIC(10, 2) DEFAULT 0"),
@@ -29,6 +36,19 @@ ADDITIVE_COLUMNS = {
         ("package_unit", "VARCHAR(30)"),
         ("source_type", "VARCHAR(50) DEFAULT 'manual'"),
         ("price_scope", "VARCHAR(50) DEFAULT 'manual'"),
+    ],
+    "retail_store_locations": [
+        ("store_name", "VARCHAR(255)"),
+        ("address_query", "TEXT"),
+        ("lat", "DOUBLE PRECISION"),
+        ("lon", "DOUBLE PRECISION"),
+        ("coordinate_status", "VARCHAR(80) DEFAULT 'needs_geocode'"),
+        ("source_type", "VARCHAR(120)"),
+        ("source_name", "TEXT"),
+        ("source_url", "TEXT"),
+        ("coverage_note", "TEXT"),
+        ("chain_completeness", "VARCHAR(120)"),
+        ("fetched_at", "DATE"),
     ],
 }
 

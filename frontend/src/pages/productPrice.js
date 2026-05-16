@@ -8,6 +8,7 @@ import {
 } from "../data/productPrice.js";
 import { assetUrl, fetchJson, rerenderRoute } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
+import { appHref } from "../shared/navigation.js";
 import { formatProductText } from "../shared/text.js";
 
 let priceData = {
@@ -19,14 +20,18 @@ let priceData = {
 };
 let loadedProductKey = null;
 let loadedComparisonData = null;
+let loadedComparisonProductKey = null;
+let activeProductKey = null;
+let latestLoadRequestId = 0;
 let selectedPricePeriod = "1m";
 let selectedPriceSource = "receipt";
+const lastProductPriceQueryKey = "smartcart:lastProductPriceQuery";
 const seriesColors = ["#f97316", "#0f4c92", "#16a34a", "#ef1212", "#a678e8", "#6aa5f8"];
 const priceSourceFilters = [
   {
     key: "receipt",
-    label: "Мої чеки",
-    description: "ціни зі сканованих чеків",
+    label: "Чеки користувачів",
+    description: "ціни зі спільних чеків",
   },
   {
     key: "official",
@@ -43,6 +48,48 @@ function applyPriceData(data) {
     selectedProduct: data.selectedProduct ?? fallbackSelectedProduct,
     storePrices: Array.isArray(data.storePrices) ? data.storePrices : fallbackStorePrices,
   };
+}
+
+function fallbackPriceDataForProduct(productKey, { byId = false } = {}) {
+  return {
+    priceChart: emptyPriceChart(),
+    priceSeries: [],
+    productPriceInsight: {
+      title: "Завантаження цін",
+      text: "Дані для товару оновлюються.",
+    },
+    selectedProduct: {
+      ...fallbackSelectedProduct,
+      name: byId ? "Завантаження товару" : productKey || fallbackSelectedProduct.name,
+      description: "Дані оновлюються",
+      price: "—",
+      badge: "Завантаження",
+    },
+    storePrices: [],
+  };
+}
+
+function productStateKey(productKey, { byId = false } = {}) {
+  return `${byId ? "id" : "name"}:${String(productKey || "")}`;
+}
+
+function productRequestKey(productKey, period, { byId = false } = {}) {
+  return `${productStateKey(productKey, { byId })}:${period}`;
+}
+
+function resetProductStateIfNeeded(productKey, { byId = false } = {}) {
+  const nextProductKey = productStateKey(productKey, { byId });
+  if (activeProductKey === nextProductKey) {
+    return false;
+  }
+
+  activeProductKey = nextProductKey;
+  loadedProductKey = null;
+  loadedComparisonData = null;
+  loadedComparisonProductKey = null;
+  latestLoadRequestId += 1;
+  priceData = fallbackPriceDataForProduct(productKey, { byId });
+  return true;
 }
 
 function timestampFromObservedAt(value) {
@@ -73,6 +120,31 @@ function chartTicksForPrices(prices) {
 
 function sourceLabelFor(sourceKey) {
   return sourceKey === "receipt" ? "чек" : "сайт";
+}
+
+function retailerKeyFromName(name) {
+  const value = String(name || "").toLowerCase();
+
+  if (value.includes("атб") || value.includes("atb")) {
+    return "atb";
+  }
+  if (value.includes("сільпо") || value.includes("silpo")) {
+    return "silpo";
+  }
+  if (value.includes("novus")) {
+    return "novus";
+  }
+  if (value.includes("ашан") || value.includes("auchan")) {
+    return "auchan";
+  }
+  if (value.includes("varus")) {
+    return "varus";
+  }
+  if (value.includes("еко") || value.includes("eko")) {
+    return "eko_market";
+  }
+
+  return "all";
 }
 
 function normalizePriceObservation(price, sourceKey) {
@@ -163,7 +235,7 @@ function buildPriceDataFromComparison(data, sourceKey = selectedPriceSource) {
       ? {
           title:
             sourceKey === "receipt"
-              ? "Динаміка за моїми чеками, ₴"
+              ? "Динаміка за чеками користувачів, ₴"
               : "Динаміка з офіційних сайтів, ₴",
           yTicks: chartTicksForPrices(prices),
           xLabels,
@@ -175,9 +247,9 @@ function buildPriceDataFromComparison(data, sourceKey = selectedPriceSource) {
       text:
         selectedObservations.length > 0
           ? sourceKey === "receipt"
-            ? "Показано тільки ціни з ваших відсканованих чеків за обраний період."
+            ? "Показано ціни зі спільних чеків користувачів за обраний період."
             : data.notice || "Показано тільки ціни з офіційних сайтів магазинів."
-          : `Для режиму “${sourceKey === "receipt" ? "Мої чеки" : "Офіційні сайти"}” ще немає цін за обраний період.`,
+          : `Для режиму “${sourceKey === "receipt" ? "Чеки користувачів" : "Офіційні сайти"}” ще немає цін за обраний період.`,
     },
     selectedProduct: {
       name: product.name || fallbackSelectedProduct.name,
@@ -194,25 +266,36 @@ function buildPriceDataFromComparison(data, sourceKey = selectedPriceSource) {
 }
 
 function loadProductPrice(productKey, period, { byId = false } = {}) {
-  const key = `${byId ? "id" : "name"}:${productKey}:${period}`;
+  const key = productRequestKey(productKey, period, { byId });
+  const requestProductKey = productStateKey(productKey, { byId });
   if (loadedProductKey === key) {
     return;
   }
 
   loadedProductKey = key;
+  const requestId = latestLoadRequestId + 1;
+  latestLoadRequestId = requestId;
   const path = byId
     ? `/api/products/${encodeURIComponent(productKey)}/price-comparison?period=${encodeURIComponent(period)}`
     : `/api/products/${encodeURIComponent(productKey)}/prices?period=${encodeURIComponent(period)}`;
 
   fetchJson(path)
     .then((data) => {
+      if (requestId !== latestLoadRequestId || activeProductKey !== requestProductKey) {
+        return;
+      }
+
       if (byId) {
         loadedComparisonData = data;
+        loadedComparisonProductKey = requestProductKey;
       }
       applyPriceData(byId ? buildPriceDataFromComparison(data, selectedPriceSource) : data);
       rerenderRoute();
     })
     .catch((error) => {
+      if (requestId === latestLoadRequestId && loadedProductKey === key) {
+        loadedProductKey = null;
+      }
       console.warn(error.message);
     });
 }
@@ -454,10 +537,32 @@ export function renderProductPricePage() {
 export function bindProductPricePage() {
   const params = new URLSearchParams(window.location.search);
   const requestedProductId = params.get("productId");
-  const requestedProduct = params.get("product") ?? fallbackSelectedProduct.name;
+  const requestedProductParam = params.get("product");
 
-  loadProductPrice(requestedProductId ?? requestedProduct, selectedPricePeriod, {
-    byId: Boolean(requestedProductId),
+  if (!requestedProductId && !requestedProductParam) {
+    const savedQuery = window.sessionStorage?.getItem(lastProductPriceQueryKey);
+    if (savedQuery) {
+      window.history.replaceState({}, "", appHref(`/product-price${savedQuery}`));
+      rerenderRoute();
+      return;
+    }
+  }
+
+  if (requestedProductId || requestedProductParam) {
+    window.sessionStorage?.setItem(lastProductPriceQueryKey, window.location.search);
+  }
+
+  const requestedProduct = requestedProductParam ?? fallbackSelectedProduct.name;
+  const productKey = requestedProductId ?? requestedProduct;
+  const isProductIdRequest = Boolean(requestedProductId);
+
+  if (resetProductStateIfNeeded(productKey, { byId: isProductIdRequest })) {
+    rerenderRoute();
+    return;
+  }
+
+  loadProductPrice(productKey, selectedPricePeriod, {
+    byId: isProductIdRequest,
   });
 
   document.querySelectorAll(".product-price-period").forEach((chip) => {
@@ -469,8 +574,8 @@ export function bindProductPricePage() {
       chip.classList.add("active");
       console.log("Product price period:", chip.dataset.periodKey);
       selectedPricePeriod = chip.dataset.periodKey;
-      loadProductPrice(requestedProductId ?? requestedProduct, selectedPricePeriod, {
-        byId: Boolean(requestedProductId),
+      loadProductPrice(productKey, selectedPricePeriod, {
+        byId: isProductIdRequest,
       });
     });
   });
@@ -479,7 +584,7 @@ export function bindProductPricePage() {
     filter.addEventListener("click", () => {
       selectedPriceSource = filter.dataset.priceSource || "receipt";
 
-      if (loadedComparisonData) {
+      if (loadedComparisonData && loadedComparisonProductKey === activeProductKey) {
         applyPriceData(buildPriceDataFromComparison(loadedComparisonData, selectedPriceSource));
         rerenderRoute();
       }
@@ -488,7 +593,17 @@ export function bindProductPricePage() {
 
   document.querySelectorAll(".store-price-row").forEach((row) => {
     row.addEventListener("click", () => {
-      console.log("Open store price:", row.dataset.storeName);
+      if (!requestedProductId) {
+        console.log("Open store price:", row.dataset.storeName);
+        return;
+      }
+
+      const params = new URLSearchParams({
+        productId: requestedProductId,
+        retailer: retailerKeyFromName(row.dataset.storeName || ""),
+      });
+      window.history.pushState({}, "", appHref(`/stores-map?${params.toString()}`));
+      rerenderRoute();
     });
   });
 

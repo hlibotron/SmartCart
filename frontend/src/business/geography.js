@@ -1,5 +1,6 @@
 import {
   bindBusinessMockLinks,
+  businessFilterApiPath,
   renderBusinessKpiCards,
   renderBusinessPageShell,
 } from "./components.js";
@@ -9,7 +10,7 @@ import { appHref } from "../shared/navigation.js";
 
 let businessGeographyState = null;
 let businessGeographyError = "";
-let geographyRequested = false;
+let geographyRequestKey = "";
 
 const loadingFilters = {
   period: "Завантаження",
@@ -31,6 +32,7 @@ function renderBusinessDataState(title, message) {
     activeKey: "geography",
     title: "Географія та пікові години",
     filters: loadingFilters,
+    filterOptions: {},
     status: loadingStatus,
     updatedLabel: "Оновлено",
     children: `
@@ -270,6 +272,7 @@ export function renderBusinessGeographyPage() {
     activeKey: "geography",
     title: "Географія та пікові години",
     filters: businessGeographyState.filters,
+    filterOptions: businessGeographyState.filterOptions,
     status: businessGeographyState.status,
     updatedLabel: "Оновлено",
     children: `
@@ -287,11 +290,14 @@ export function renderBusinessGeographyPage() {
 }
 
 export function bindBusinessGeographyPage() {
-  if (!geographyRequested) {
-    geographyRequested = true;
-    fetchJson("/api/business/geography")
+  const requestKey = businessFilterApiPath("/api/business/geography");
+
+  if (geographyRequestKey !== requestKey) {
+    geographyRequestKey = requestKey;
+    fetchJson(requestKey)
       .then((data) => {
         businessGeographyState = data;
+        businessGeographyError = "";
         rerenderRoute();
       })
       .catch((error) => {

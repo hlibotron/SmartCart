@@ -175,6 +175,41 @@
   line-height: 1.35;
 }
 
+.page-card small {
+  color: #7c8594;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.cashback-stats,
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.cashback-offers {
+  display: grid;
+  gap: 12px;
+}
+
+.cashback-stat-card,
+.profile-stat-card {
+  min-height: 132px;
+  padding: 16px;
+}
+
+.cashback-stat-card h2,
+.profile-stat-card h2 {
+  font-size: 20px;
+}
+
+.cashback-offer-card {
+  min-height: 138px;
+}
+
 .bottom-nav {
   position: fixed;
   z-index: 10;
@@ -183,7 +218,8 @@
   left: 50%;
   display: grid;
   width: min(100%, var(--client-shell-width));
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 70px minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 2px;
   height: 78px;
   padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
@@ -211,6 +247,27 @@
   cursor: pointer;
 }
 
+.nav-item[data-nav-path="/"] {
+  grid-column: 1;
+}
+
+.nav-item[data-nav-path="/receipts"] {
+  grid-column: 2;
+}
+
+.nav-scan-button {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.nav-item[data-nav-path="/products"] {
+  grid-column: 4;
+}
+
+.nav-item[data-nav-path="/analytics"] {
+  grid-column: 5;
+}
+
 .nav-item::before {
   content: "";
   position: absolute;
@@ -236,7 +293,7 @@
 
 .nav-item span {
   overflow: hidden;
-  max-width: 64px;
+  max-width: 58px;
   font-size: 11px;
   font-weight: 650;
   line-height: 1.1;
@@ -248,8 +305,8 @@
   position: relative;
   top: -18px;
   display: grid;
-  width: 64px;
-  height: 64px;
+  width: 58px;
+  height: 58px;
   place-items: center;
   justify-self: center;
   align-self: start;

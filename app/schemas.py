@@ -9,6 +9,18 @@ class UserIn(BaseModel):
     username: str | None = None
 
 
+class AuthRegister(BaseModel):
+    name: str = Field(min_length=2, max_length=255)
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=6, max_length=128)
+    city: str | None = Field(default=None, max_length=120)
+
+
+class AuthLogin(BaseModel):
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
+
+
 class ReceiptItemIn(BaseModel):
     raw_name: str | None = Field(default=None, max_length=255)
     item_name: str = Field(min_length=1, max_length=255)

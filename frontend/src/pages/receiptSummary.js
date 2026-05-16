@@ -125,19 +125,9 @@ export function renderReceiptItem(item) {
         </div>
       </div>
       <span class="receipt-item-cell receipt-item-total">
-        <small>Сума</small>
-        <strong>${item.total}</strong>
-      </span>
-      <span class="receipt-item-cell receipt-detail-pill receipt-detail-pill--discount">
         <span>
-          <small>Знижка</small>
-          ${renderValue(item.discount)}
-        </span>
-      </span>
-      <span class="receipt-item-cell receipt-detail-pill receipt-detail-pill--store-cashback">
-        <span>
-          <small>Кешбек магазину</small>
-          ${renderValue(item.storeCashback, item.storeCashbackLabel)}
+          <small>Сума</small>
+          <strong>${item.total}</strong>
         </span>
       </span>
       <span class="receipt-item-cell receipt-detail-pill receipt-detail-pill--smartcart">

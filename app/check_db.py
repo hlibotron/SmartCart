@@ -7,7 +7,17 @@ from app.db.database import engine
 
 
 REQUIRED_COLUMNS = {
-    "users": {"id", "telegram_id", "username", "created_at"},
+    "users": {
+        "id",
+        "telegram_id",
+        "username",
+        "email",
+        "password_hash",
+        "city",
+        "level",
+        "avatar_url",
+        "created_at",
+    },
     "receipts": {
         "id",
         "user_id",

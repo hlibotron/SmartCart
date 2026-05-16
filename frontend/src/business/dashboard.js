@@ -1,5 +1,6 @@
 import {
   bindBusinessMockLinks,
+  businessFilterApiPath,
   renderBusinessKpiCards,
   renderBusinessPageShell,
 } from "./components.js";
@@ -9,7 +10,7 @@ import { appHref } from "../shared/navigation.js";
 
 let businessOverviewState = null;
 let businessOverviewError = "";
-let overviewRequested = false;
+let overviewRequestKey = "";
 
 const loadingFilters = {
   period: "Завантаження",
@@ -28,6 +29,7 @@ function renderBusinessDataState(title, message) {
     activeKey: "overview",
     title: "Огляд бізнесу",
     filters: loadingFilters,
+    filterOptions: {},
     status: loadingStatus,
     children: `
       <section class="business-overview-card" aria-labelledby="business-data-state-title">
@@ -222,6 +224,7 @@ export function renderBusinessDashboardPage() {
     activeKey: "overview",
     title: "Огляд бізнесу",
     filters: businessOverviewState.filters,
+    filterOptions: businessOverviewState.filterOptions,
     status: businessOverviewState.status,
     children: `
         ${renderBusinessKpiCards(businessOverviewState.kpis, "Ключові показники огляду")}
@@ -232,11 +235,14 @@ export function renderBusinessDashboardPage() {
 }
 
 export function bindBusinessDashboardPage() {
-  if (!overviewRequested) {
-    overviewRequested = true;
-    fetchJson("/api/business/overview")
+  const requestKey = businessFilterApiPath("/api/business/overview");
+
+  if (overviewRequestKey !== requestKey) {
+    overviewRequestKey = requestKey;
+    fetchJson(requestKey)
       .then((data) => {
         businessOverviewState = data;
+        businessOverviewError = "";
         rerenderRoute();
       })
       .catch((error) => {

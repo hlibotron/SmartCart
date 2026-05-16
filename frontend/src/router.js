@@ -6,19 +6,26 @@ import {
 import { bindBusinessDashboardPage, renderBusinessDashboardPage } from "./business/dashboard.js";
 import { bindBusinessGeographyPage, renderBusinessGeographyPage } from "./business/geography.js";
 import { bindBusinessForecastPage, renderBusinessForecastPage } from "./business/forecast.js";
-import { renderCashbackPage } from "./pages/cashback.js";
+import { bindCashbackPage, renderCashbackPage } from "./pages/cashback.js";
+import { bindAuthPage, renderLoginPage, renderRegisterPage } from "./pages/auth.js";
 import { bindHomePage, renderHomePage } from "./pages/home.js";
+import {
+  bindOnboardingPage,
+  renderOnboardingPage,
+} from "./pages/onboarding/onboardingPage.js";
 import { bindProductsPage, renderProductsPage } from "./pages/products.js";
 import { bindProductPricePage, renderProductPricePage } from "./pages/productPrice.js";
-import { renderProfilePage } from "./pages/profile.js";
+import { bindProfilePage, renderProfilePage } from "./pages/profile.js";
 import { bindReceiptSummaryPage, renderReceiptSummaryPage } from "./pages/receiptSummary.js";
 import { bindReceiptsPage, renderReceiptsPage } from "./pages/receipts.js";
+import { bindStoreMapPage, renderStoreMapPage } from "./pages/storeMap.js";
 
 export const routes = {
   "/": {
     path: "/",
     navPath: "/",
     title: "Головна",
+    requiresAuth: true,
     render: renderHomePage,
     bind: bindHomePage,
   },
@@ -26,6 +33,7 @@ export const routes = {
     path: "/receipts",
     navPath: "/receipts",
     title: "Мої чеки",
+    requiresAuth: true,
     render: renderReceiptsPage,
     bind: bindReceiptsPage,
   },
@@ -34,6 +42,7 @@ export const routes = {
     navPath: "/receipts",
     backPath: "/receipts",
     title: "Підсумок чеку",
+    requiresAuth: true,
     render: renderReceiptSummaryPage,
     bind: bindReceiptSummaryPage,
   },
@@ -42,6 +51,7 @@ export const routes = {
     navPath: "/products",
     backPath: "/",
     title: "Продукти",
+    requiresAuth: true,
     render: renderProductsPage,
     bind: bindProductsPage,
   },
@@ -50,13 +60,24 @@ export const routes = {
     navPath: "/products",
     backPath: "/products",
     title: "Ціни на продукт",
+    requiresAuth: true,
     render: renderProductPricePage,
     bind: bindProductPricePage,
+  },
+  "/stores-map": {
+    path: "/stores-map",
+    navPath: "/products",
+    backPath: "/product-price",
+    title: "Ціни в магазинах",
+    requiresAuth: true,
+    render: renderStoreMapPage,
+    bind: bindStoreMapPage,
   },
   "/analytics": {
     path: "/analytics",
     navPath: "/analytics",
     title: "Аналітика покупок",
+    requiresAuth: true,
     render: renderAnalyticsPage,
     bind: bindAnalyticsPage,
   },
@@ -65,6 +86,7 @@ export const routes = {
     navPath: "/analytics",
     backPath: "/analytics",
     title: "Аналітика категорії",
+    requiresAuth: true,
     render: renderAnalyticsCategoryPage,
     bind: bindAnalyticsCategoryPage,
   },
@@ -72,13 +94,40 @@ export const routes = {
     path: "/cashback",
     navPath: "/",
     title: "Кешбек",
+    requiresAuth: true,
     render: renderCashbackPage,
+    bind: bindCashbackPage,
   },
   "/profile": {
     path: "/profile",
     navPath: "/profile",
     title: "Профіль",
+    requiresAuth: true,
     render: renderProfilePage,
+    bind: bindProfilePage,
+  },
+  "/login": {
+    path: "/login",
+    layout: "onboarding",
+    title: "Вхід",
+    authOnly: true,
+    render: renderLoginPage,
+    bind: bindAuthPage,
+  },
+  "/register": {
+    path: "/register",
+    layout: "onboarding",
+    title: "Реєстрація",
+    authOnly: true,
+    render: renderRegisterPage,
+    bind: bindAuthPage,
+  },
+  "/onboarding": {
+    path: "/onboarding",
+    layout: "onboarding",
+    title: "Вступ",
+    render: renderOnboardingPage,
+    bind: bindOnboardingPage,
   },
   "/business": {
     path: "/business",

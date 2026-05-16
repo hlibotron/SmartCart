@@ -6,5 +6,9 @@
 @import "./analytics.css";
 @import "./products.css";
 @import "./product-price.css";
+@import "./store-map.css";
 @import "./client-container.css";
+@import "./onboarding.css";
+@import "./auth.css";
+@import "./profile.css";
 @import "./business.css";

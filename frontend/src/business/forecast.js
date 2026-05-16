@@ -3,6 +3,7 @@ import {
   renderBusinessKpiCards,
   renderBusinessPageShell,
 } from "./components.js";
+import { apiUrl } from "../shared/api.js";
 import { icon } from "../shared/icons.js";
 
 
@@ -35,7 +36,7 @@ async function fetchPricing(params = {}) {
     loyalty:    params.loyalty    ?? 8,
     days:       params.days       ?? 7,
   });
-  const res = await fetch(`/api/forecast/pricing?${qs}`);
+  const res = await fetch(apiUrl(`/api/forecast/pricing?${qs}`));
   if (!res.ok) throw new Error("pricing fetch failed");
   return res.json();
 }
@@ -43,7 +44,7 @@ async function fetchPricing(params = {}) {
 async function fetchMarket(params = {}) {
   const qs = new URLSearchParams({ store: params.store ?? "АТБ", days: params.days ?? 14 });
   if (params.category) qs.set("category", params.category);
-  const res = await fetch(`/api/forecast/market?${qs}`);
+  const res = await fetch(apiUrl(`/api/forecast/market?${qs}`));
   if (!res.ok) throw new Error("market fetch failed");
   return res.json();
 }
@@ -51,7 +52,7 @@ async function fetchMarket(params = {}) {
 async function fetchBrandImpact(store, brand) {
   try {
     const qs = new URLSearchParams({ store, brand, days: 14 });
-    const res = await fetch(`/api/forecast/brand-impact?${qs}`);
+    const res = await fetch(apiUrl(`/api/forecast/brand-impact?${qs}`));
     if (!res.ok) return null;
     return await res.json();
   } catch (err) {
@@ -63,7 +64,7 @@ async function fetchBrandImpact(store, brand) {
 async function fetchTrend(store = "АТБ") {
   try {
     const qs = new URLSearchParams({ store });
-    const res = await fetch(`/api/forecast/trend?${qs}`);
+    const res = await fetch(apiUrl(`/api/forecast/trend?${qs}`));
     if (!res.ok) return { data: [] };
     return await res.json();
   } catch (err) {

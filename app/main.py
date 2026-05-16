@@ -2,20 +2,24 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from decimal import Decimal
 from difflib import SequenceMatcher
+import hashlib
+import hmac
 from math import ceil, floor
 from pathlib import Path
 import base64
 import json
 import os
 import re
+import secrets
+import time
 from urllib.parse import quote
 import uuid
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
-from sqlalchemy import func, inspect as sa_inspect, select, text
+from sqlalchemy import case, func, inspect as sa_inspect, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,8 +31,10 @@ except ImportError:  # pragma: no cover - handled at runtime with a clear API er
     class OpenAIError(Exception):
         pass
 
-from app.db.database import get_db
+from app.db.database import engine, get_db
 from app.db.models import (
+    AdminGeoUnit,
+    CashbackOffer,
     Product,
     ProductAlias,
     ProductListing,
@@ -37,11 +43,15 @@ from app.db.models import (
     Receipt,
     ReceiptItem,
     ReceiptOcrJob,
+    RetailStoreLocation,
     Store,
     User,
 )
+from app.db.schema import ensure_schema
 from app.categories import PRODUCT_CATEGORIES, category_payload, get_category, normalize_category
 from app.schemas import (
+    AuthLogin,
+    AuthRegister,
     MatchCandidateResolve,
     OcrReceiptParsed,
     ProductCategoryUpdate,
@@ -57,14 +67,29 @@ app = FastAPI(title="SmartCart API")
 
 from app.routers import forecast as forecast_router
 app.include_router(forecast_router.router)
+app.include_router(forecast_router.router, prefix="/api")
+
+
+def _cors_origins_from_env():
+    defaults = ["http://127.0.0.1:5173", "http://localhost:5173"]
+    configured = os.getenv("CORS_ORIGINS", "")
+    origins = defaults + [origin.strip().rstrip("/") for origin in configured.split(",")]
+    return list(dict.fromkeys(origin for origin in origins if origin))
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_origins=_cors_origins_from_env(),
+    allow_origin_regex=r"http://(127\.0\.0\.1|localhost):\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def ensure_database_schema():
+    await ensure_schema(engine)
 
 
 PERIOD_DAYS = {
@@ -72,6 +97,20 @@ PERIOD_DAYS = {
     "2w": 14,
     "1m": 30,
     "3m": 90,
+}
+
+BUSINESS_PERIOD_LABELS = {
+    "1w": "Останні 7 днів",
+    "2w": "Останні 14 днів",
+    "1m": "Останні 30 днів",
+    "3m": "Останні 90 днів",
+}
+
+BUSINESS_GEOGRAPHY_LABELS = {
+    "ukraine": "Україна",
+    "region": "Область",
+    "community": "Громада",
+    "city": "Місто",
 }
 
 CURRENCY_SYMBOLS = {
@@ -82,6 +121,8 @@ CURRENCY_SYMBOLS = {
 
 AUTO_MATCH_THRESHOLD = Decimal("0.86")
 REVIEW_MATCH_THRESHOLD = Decimal("0.65")
+AUTH_SECRET = os.getenv("SMARTCART_AUTH_SECRET", "smartcart-dev-secret")
+AUTH_TOKEN_TTL_SECONDS = int(os.getenv("SMARTCART_AUTH_TOKEN_TTL_SECONDS", str(60 * 60 * 24 * 30)))
 APP_DIR = Path(__file__).resolve().parent
 RECEIPT_UPLOAD_DIR = Path(
     os.getenv("RECEIPT_UPLOAD_DIR", APP_DIR / "uploads" / "receipt-scans")
@@ -282,13 +323,331 @@ async def db_health(db: AsyncSession = Depends(get_db)):
     }
 
 
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    iterations = 120_000
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return "$".join(
+        [
+            "pbkdf2_sha256",
+            str(iterations),
+            base64.urlsafe_b64encode(salt).decode("ascii"),
+            base64.urlsafe_b64encode(digest).decode("ascii"),
+        ]
+    )
+
+
+def verify_password(password: str, password_hash: str | None) -> bool:
+    if not password_hash:
+        return False
+
+    try:
+        algorithm, iterations_raw, salt_raw, digest_raw = password_hash.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        iterations = int(iterations_raw)
+        salt = base64.urlsafe_b64decode(salt_raw.encode("ascii"))
+        expected = base64.urlsafe_b64decode(digest_raw.encode("ascii"))
+    except (ValueError, TypeError):
+        return False
+
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return hmac.compare_digest(digest, expected)
+
+
+def auth_signature(payload: str) -> str:
+    return base64.urlsafe_b64encode(
+        hmac.new(AUTH_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).digest()
+    ).decode("ascii").rstrip("=")
+
+
+def create_auth_token(user: User) -> str:
+    expires_at = int(time.time()) + AUTH_TOKEN_TTL_SECONDS
+    payload = f"{user.id}:{expires_at}:{secrets.token_urlsafe(8)}"
+    return f"{base64.urlsafe_b64encode(payload.encode('utf-8')).decode('ascii').rstrip('=')}.{auth_signature(payload)}"
+
+
+def parse_auth_token(token: str | None) -> int | None:
+    if not token or "." not in token:
+        return None
+
+    payload_raw, signature = token.split(".", 1)
+    try:
+        padded_payload = payload_raw + "=" * (-len(payload_raw) % 4)
+        payload = base64.urlsafe_b64decode(padded_payload.encode("ascii")).decode("utf-8")
+        user_id_raw, expires_at_raw, _nonce = payload.split(":", 2)
+        if not hmac.compare_digest(auth_signature(payload), signature):
+            return None
+        if int(expires_at_raw) < int(time.time()):
+            return None
+        return int(user_id_raw)
+    except (ValueError, TypeError):
+        return None
+
+
+async def current_user_from_authorization(
+    authorization: str | None,
+    db: AsyncSession,
+) -> User | None:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+
+    user_id = parse_auth_token(authorization.split(" ", 1)[1].strip())
+    if user_id is None:
+        return None
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    return result.scalar_one_or_none()
+
+
+async def optional_current_user(
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    return await current_user_from_authorization(authorization, db)
+
+
+def user_payload(user: User) -> dict:
+    return {
+        "id": user.id,
+        "name": user.username or "SmartCart користувач",
+        "username": user.username,
+        "email": user.email,
+        "city": user.city,
+        "level": user.level or "Базовий рівень",
+        "avatarUrl": user.avatar_url,
+        "joinedAt": ui_datetime(user.created_at) if user.created_at else None,
+    }
+
+
+async def generate_web_telegram_id(db: AsyncSession) -> int:
+    while True:
+        telegram_id = -int.from_bytes(secrets.token_bytes(6), "big")
+        result = await db.execute(select(User.id).where(User.telegram_id == telegram_id))
+        if result.scalar_one_or_none() is None:
+            return telegram_id
+
+
+@app.post("/auth/register")
+@app.post("/api/auth/register")
+async def register_user(payload: AuthRegister, db: AsyncSession = Depends(get_db)):
+    email = normalize_email(payload.email)
+    existing_result = await db.execute(select(User).where(func.lower(User.email) == email))
+    if existing_result.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="Користувач з таким email вже існує")
+
+    user = User(
+        telegram_id=await generate_web_telegram_id(db),
+        username=payload.name.strip(),
+        email=email,
+        password_hash=hash_password(payload.password),
+        city=payload.city.strip() if payload.city else None,
+        level="Базовий рівень",
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return {"token": create_auth_token(user), "user": user_payload(user)}
+
+
+@app.post("/auth/login")
+@app.post("/api/auth/login")
+async def login_user(payload: AuthLogin, db: AsyncSession = Depends(get_db)):
+    email = normalize_email(payload.email)
+    result = await db.execute(select(User).where(func.lower(User.email) == email))
+    user = result.scalar_one_or_none()
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Невірний email або пароль")
+
+    return {"token": create_auth_token(user), "user": user_payload(user)}
+
+
+@app.get("/auth/me")
+@app.get("/api/auth/me")
+async def auth_me(current_user: User | None = Depends(optional_current_user)):
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Потрібен вхід в акаунт")
+
+    return {"user": user_payload(current_user)}
+
+
+@app.get("/profile")
+@app.get("/api/profile")
+async def profile_overview(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
+    if current_user is None:
+        user_result = await db.execute(select(User).order_by(User.created_at.asc()).limit(1))
+        current_user = user_result.scalar_one_or_none()
+
+    receipts_query = select(Receipt).options(selectinload(Receipt.items))
+    if current_user is not None:
+        receipts_query = receipts_query.where(Receipt.user_id == current_user.id)
+    receipts_result = await db.execute(receipts_query)
+    receipts = receipts_result.scalars().all()
+
+    products_count_result = await db.execute(select(func.count(Product.id)))
+    products_count = products_count_result.scalar_one() or 0
+
+    total_spent = sum((to_decimal(receipt.total) for receipt in receipts), Decimal("0"))
+    total_cashback = sum(
+        (
+            to_decimal(receipt.store_cashback_total)
+            + to_decimal(receipt.smartcart_cashback_total)
+            for receipt in receipts
+        ),
+        Decimal("0"),
+    )
+    if total_cashback <= 0:
+        total_cashback = sum(
+            (
+                to_decimal(item.store_cashback_amount)
+                + to_decimal(item.smartcart_cashback_amount)
+                for receipt in receipts
+                for item in receipt.items
+            ),
+            Decimal("0"),
+        )
+
+    latest_receipt = max(receipts, key=receipt_date, default=None)
+    display_name = current_user.username if current_user and current_user.username else "SmartCart користувач"
+
+    return {
+        "user": {
+            "name": display_name,
+            "username": current_user.username if current_user else None,
+            "email": current_user.email if current_user else None,
+            "telegramId": str(current_user.telegram_id) if current_user and current_user.telegram_id else None,
+            "city": current_user.city if current_user else None,
+            "level": current_user.level if current_user and current_user.level else "Базовий рівень",
+            "avatarUrl": current_user.avatar_url if current_user else None,
+            "joinedAt": ui_datetime(current_user.created_at) if current_user else None,
+        },
+        "stats": [
+            {"label": "Чеків", "value": str(len(receipts)), "icon": "receiptCheck"},
+            {"label": "Витрачено", "value": money(total_spent), "icon": "wallet"},
+            {"label": "Кешбек", "value": money(total_cashback), "icon": "cashback"},
+            {"label": "Товарів у базі", "value": str(products_count), "icon": "basket"},
+        ],
+        "summary": {
+            "title": "SmartCart профіль",
+            "description": "Персональні налаштування та прогрес кешбеку",
+            "latestActivity": ui_datetime(receipt_date(latest_receipt)) if latest_receipt else "Додайте перший чек",
+        },
+    }
+
+
+@app.get("/cashback")
+@app.get("/api/cashback")
+async def cashback_overview(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
+    receipts_query = select(Receipt).options(selectinload(Receipt.items))
+    if current_user is not None:
+        receipts_query = receipts_query.where(Receipt.user_id == current_user.id)
+    receipts_result = await db.execute(receipts_query)
+    receipts = receipts_result.scalars().all()
+
+    receipt_store_cashback = sum(
+        (
+            to_decimal(receipt.store_cashback_total)
+            or sum((to_decimal(item.store_cashback_amount) for item in receipt.items), Decimal("0"))
+            for receipt in receipts
+        ),
+        Decimal("0"),
+    )
+    receipt_smartcart_cashback = sum(
+        (
+            to_decimal(receipt.smartcart_cashback_total)
+            or sum((to_decimal(item.smartcart_cashback_amount) for item in receipt.items), Decimal("0"))
+            for receipt in receipts
+        ),
+        Decimal("0"),
+    )
+    expected_cashback = receipt_store_cashback + receipt_smartcart_cashback
+    cashback_receipts = [
+        receipt
+        for receipt in receipts
+        if to_decimal(receipt.store_cashback_total) > 0
+        or to_decimal(receipt.smartcart_cashback_total) > 0
+        or any(
+            to_decimal(item.store_cashback_amount) > 0
+            or to_decimal(item.smartcart_cashback_amount) > 0
+            for item in receipt.items
+        )
+    ]
+
+    offer_result = await db.execute(
+        select(CashbackOffer)
+        .options(selectinload(CashbackOffer.product), selectinload(CashbackOffer.store))
+        .where(CashbackOffer.is_active == True)
+        .order_by(CashbackOffer.ends_at.asc().nullslast(), CashbackOffer.created_at.desc())
+        .limit(12)
+    )
+    now = datetime.utcnow()
+    offers = []
+    for offer in offer_result.scalars().all():
+        if offer.ends_at and offer.ends_at < now:
+            continue
+        product = offer.product
+        store = offer.store
+        amount = to_decimal(offer.cashback_amount)
+        percent = to_decimal(offer.cashback_percent)
+        value = money(amount) if amount > 0 else f"{percent.normalize()}%" if percent > 0 else "Активно"
+        title = offer.title or (product.name if product else "Кешбек пропозиція")
+        subtitle_parts = [
+            display_store_name(store.name if store else None) if store else None,
+            product.name if product and offer.title else None,
+        ]
+        offers.append(
+            {
+                "id": offer.id,
+                "title": title,
+                "subtitle": " · ".join(part for part in subtitle_parts if part) or "SmartCart",
+                "value": value,
+                "endsAt": ui_datetime(offer.ends_at) if offer.ends_at else "Без кінцевої дати",
+                "icon": "gift",
+            }
+        )
+
+    return {
+        "summary": {
+            "title": "Активні кампанії",
+            "description": f"{money(expected_cashback)} очікує на зарахування з {len(cashback_receipts)} {receipt_word(len(cashback_receipts))}",
+            "expected": money(expected_cashback),
+            "receiptCount": len(cashback_receipts),
+        },
+        "stats": [
+            {"label": "Очікує", "value": money(expected_cashback), "icon": "gift"},
+            {"label": "З магазинів", "value": money(receipt_store_cashback), "icon": "store"},
+            {"label": "SmartCart", "value": money(receipt_smartcart_cashback), "icon": "cashback"},
+        ],
+        "offers": offers,
+    }
+
+
 @app.get("/home")
 @app.get("/api/home")
-async def home_overview(db: AsyncSession = Depends(get_db)):
-    receipts_result = await db.execute(
+async def home_overview(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
+    receipts_query = (
         select(Receipt)
         .options(selectinload(Receipt.items).selectinload(ReceiptItem.product))
         .order_by(Receipt.receipt_datetime.desc().nullslast(), Receipt.created_at.desc())
+    )
+    if current_user is not None:
+        receipts_query = receipts_query.where(Receipt.user_id == current_user.id)
+    receipts_result = await db.execute(
+        receipts_query
     )
     receipts = receipts_result.scalars().all()
     rows = [(item, receipt) for receipt in receipts for item in receipt.items]
@@ -686,6 +1045,17 @@ def logo_for(store: str | None) -> tuple[str, str]:
     return "default", logo_text[:8]
 
 
+def retailer_key_for_store(store: str | None) -> str:
+    logo_key, _ = logo_for(store)
+    if logo_key != "default":
+        return logo_key
+
+    normalized = normalize_name(display_store_name(store))
+    if "varus" in normalized or "варус" in normalized:
+        return "varus"
+    return image_slug(normalized) or "receipt_store"
+
+
 def store_logo_url(store: str | None) -> str | None:
     logo_key, logo_text = logo_for(store)
     candidate_stems: list[str] = []
@@ -753,12 +1123,290 @@ def business_status_payload() -> dict:
     }
 
 
-def business_filters_payload(category: str = "Усі категорії", period: str = "Останні 30 днів") -> dict:
+def business_filters_payload(
+    category: str = "Усі категорії",
+    period: str = "Останні 30 днів",
+    retailer: str = "Усі ритейлери",
+    geography: str = "Вся Україна",
+) -> dict:
     return {
         "period": period,
-        "geography": "Дані з чеків",
+        "geography": geography,
         "category": category,
-        "retailer": "Усі ритейлери",
+        "retailer": retailer,
+    }
+
+
+def sanitize_business_period(period: str | None) -> str:
+    return period if period in PERIOD_DAYS else "1m"
+
+
+def sanitize_business_category(category: str | None) -> str:
+    return category if category in PRODUCT_CATEGORIES else "all"
+
+
+def sanitize_business_retailer(retailer: str | None) -> str:
+    return retailer.strip() if retailer and retailer.strip() else "all"
+
+
+def sanitize_business_geography(geography: str | None) -> str:
+    return geography if geography in BUSINESS_GEOGRAPHY_LABELS else "ukraine"
+
+
+def sanitize_geo_code(value: str | None) -> str:
+    return value.strip() if value and value.strip() else ""
+
+
+def sanitize_business_text_filter(value: str | None) -> str:
+    return value.strip() if value and value.strip() else ""
+
+
+def business_filter_context(
+    period: str | None = None,
+    category: str | None = None,
+    retailer: str | None = None,
+    geography: str | None = None,
+    geo_region: str | None = None,
+    geo_community: str | None = None,
+    geo_city: str | None = None,
+    brand: str | None = None,
+    product: str | None = None,
+) -> dict:
+    period_key = sanitize_business_period(period)
+    category_key = sanitize_business_category(category)
+    retailer_key = sanitize_business_retailer(retailer)
+    geography_key = sanitize_business_geography(geography)
+
+    return {
+        "period": period_key,
+        "periodLabel": BUSINESS_PERIOD_LABELS[period_key],
+        "category": category_key,
+        "categoryLabel": "Усі категорії" if category_key == "all" else get_category(category_key).name,
+        "retailer": retailer_key,
+        "retailerLabel": "Усі ритейлери" if retailer_key == "all" else retailer_key,
+        "geography": geography_key,
+        "geographyLabel": BUSINESS_GEOGRAPHY_LABELS[geography_key],
+        "geoRegion": sanitize_geo_code(geo_region),
+        "geoCommunity": sanitize_geo_code(geo_community),
+        "geoCity": sanitize_geo_code(geo_city),
+        "brand": sanitize_business_text_filter(brand),
+        "product": sanitize_business_text_filter(product),
+    }
+
+
+def business_rows_match_filters(
+    row: tuple[ReceiptItem, Receipt],
+    *,
+    category: str = "all",
+    retailer: str = "all",
+    brand: str = "",
+    product: str = "",
+) -> bool:
+    item, receipt = row
+    if retailer != "all" and normalize_store_name(receipt.store) != retailer:
+        return False
+
+    if category != "all":
+        item_category = normalize_category(item.category, raw_name=item.raw_name, item_name=item.item_name)
+        if item_category.key != category:
+            return False
+
+    if brand:
+        item_brand = (item.brand or getattr(item.product, "brand", None) or "").strip()
+        if item_brand != brand:
+            return False
+
+    if product:
+        product_key = str(item.product_id or "")
+        if product_key != product:
+            return False
+
+    return True
+
+
+def filter_business_rows(
+    rows: list[tuple[ReceiptItem, Receipt]],
+    *,
+    category: str = "all",
+    retailer: str = "all",
+    brand: str = "",
+    product: str = "",
+) -> list[tuple[ReceiptItem, Receipt]]:
+    return [
+        row
+        for row in rows
+        if business_rows_match_filters(
+            row,
+            category=category,
+            retailer=retailer,
+            brand=brand,
+            product=product,
+        )
+    ]
+
+
+def business_filter_options(rows: list[tuple[ReceiptItem, Receipt]], context: dict) -> dict:
+    category_keys = set()
+    for item, _ in rows:
+        category_keys.add(normalize_category(item.category, raw_name=item.raw_name, item_name=item.item_name).key)
+
+    category_options = [{"value": "all", "label": "Усі категорії"}]
+    category_options.extend(
+        {"value": category.key, "label": category.name}
+        for category in PRODUCT_CATEGORIES.values()
+        if category.key in category_keys
+    )
+    if context["category"] != "all" and not any(
+        option["value"] == context["category"] for option in category_options
+    ):
+        selected_category = get_category(context["category"])
+        category_options.append({"value": selected_category.key, "label": selected_category.name})
+
+    retailer_options = [{"value": "all", "label": "Усі ритейлери"}]
+    retailer_options.extend(
+        {"value": store["store"], "label": store["store"]}
+        for store in top_store_metrics(rows)[:10]
+    )
+    if context["retailer"] != "all" and not any(
+        option["value"] == context["retailer"] for option in retailer_options
+    ):
+        retailer_options.append({"value": context["retailer"], "label": context["retailer"]})
+
+    return {
+        "period": [
+            {"value": key, "label": label}
+            for key, label in BUSINESS_PERIOD_LABELS.items()
+        ],
+        "geography": [
+            {"value": "ukraine", "label": "Вся Україна"},
+        ],
+        "category": category_options,
+        "retailer": retailer_options,
+    }
+
+
+def business_category_unit_payload(value: str, label: str, level: str, category: str = "", brand: str = "") -> dict:
+    return {
+        "value": value,
+        "label": label,
+        "level": level,
+        "category": category,
+        "brand": brand,
+    }
+
+
+def business_category_selection(context: dict, rows: list[tuple[ReceiptItem, Receipt]]) -> dict:
+    category_key = context["category"]
+    brand = context["brand"]
+    product = context["product"]
+    selected_product = None
+
+    if product:
+        for item, _ in rows:
+            if str(item.product_id or "") == product:
+                selected_product = item.product
+                break
+
+    if selected_product:
+        product_category = normalize_category(
+            selected_product.category,
+            raw_name=selected_product.name,
+            item_name=selected_product.name,
+        )
+        return {
+            "label": selected_product.name,
+            "scope": "product",
+            "category": business_category_unit_payload(
+                product_category.key,
+                product_category.name,
+                "category",
+            ),
+            "brand": business_category_unit_payload(
+                selected_product.brand or brand,
+                selected_product.brand or brand,
+                "brand",
+                category=product_category.key,
+            ) if (selected_product.brand or brand) else None,
+            "product": business_category_unit_payload(
+                str(selected_product.id),
+                selected_product.name,
+                "product",
+                category=product_category.key,
+                brand=selected_product.brand or brand,
+            ),
+        }
+
+    if brand:
+        return {
+            "label": brand,
+            "scope": "brand",
+            "category": (
+                business_category_unit_payload(category_key, get_category(category_key).name, "category")
+                if category_key != "all"
+                else None
+            ),
+            "brand": business_category_unit_payload(brand, brand, "brand", category=category_key),
+            "product": None,
+        }
+
+    if category_key != "all":
+        category = get_category(category_key)
+        return {
+            "label": category.name,
+            "scope": "category",
+            "category": business_category_unit_payload(category.key, category.name, "category"),
+            "brand": None,
+            "product": None,
+        }
+
+    return {
+        "label": "Усі категорії",
+        "scope": "all",
+        "category": None,
+        "brand": None,
+        "product": None,
+    }
+
+
+def geo_unit_payload(unit: AdminGeoUnit | None) -> dict | None:
+    if not unit:
+        return None
+
+    return {
+        "value": unit.code,
+        "label": unit.name,
+        "level": unit.level,
+        "type": unit.type_name,
+        "regionCode": unit.region_code or (unit.code if unit.level == "region" else ""),
+        "regionName": unit.region_name or (unit.name if unit.level == "region" else ""),
+        "communityCode": unit.community_code or (unit.code if unit.level == "community" else ""),
+        "communityName": unit.community_name or (unit.name if unit.level == "community" else ""),
+    }
+
+
+async def business_geography_selection(db: AsyncSession, context: dict) -> dict:
+    codes = [
+        context.get("geoRegion"),
+        context.get("geoCommunity"),
+        context.get("geoCity"),
+    ]
+    selected_codes = [code for code in codes if code]
+    units_by_code = {}
+    if selected_codes:
+        result = await db.execute(select(AdminGeoUnit).where(AdminGeoUnit.code.in_(selected_codes)))
+        units_by_code = {unit.code: unit for unit in result.scalars().all()}
+
+    region = units_by_code.get(context.get("geoRegion"))
+    community = units_by_code.get(context.get("geoCommunity"))
+    city = units_by_code.get(context.get("geoCity"))
+
+    selected = city or community or region
+    return {
+        "label": selected.name if selected else "Вся Україна",
+        "scope": selected.level if selected else "ukraine",
+        "region": geo_unit_payload(region),
+        "community": geo_unit_payload(community),
+        "city": geo_unit_payload(city),
     }
 
 
@@ -879,7 +1527,12 @@ def top_store_metrics(rows: list[tuple[ReceiptItem, Receipt]]) -> list[dict]:
     ]
 
 
-async def fetch_item_rows(db: AsyncSession, *, since: datetime | None = None):
+async def fetch_item_rows(
+    db: AsyncSession,
+    *,
+    since: datetime | None = None,
+    user_id: int | None = None,
+):
     stmt = (
         select(ReceiptItem, Receipt)
         .join(Receipt, ReceiptItem.receipt_id == Receipt.id)
@@ -888,6 +1541,8 @@ async def fetch_item_rows(db: AsyncSession, *, since: datetime | None = None):
     )
     if since:
         stmt = stmt.where(Receipt.receipt_datetime >= since)
+    if user_id is not None:
+        stmt = stmt.where(Receipt.user_id == user_id)
     result = await db.execute(stmt)
     return result.all()
 
@@ -1373,21 +2028,16 @@ async def persist_processed_receipt_scan(
 
 @app.post("/receipts", response_model=ReceiptCreated)
 @app.post("/api/receipts", response_model=ReceiptCreated)
-async def create_receipt(payload: ReceiptCreate, db: AsyncSession = Depends(get_db)):
-    user_result = await db.execute(
-        select(User).where(User.telegram_id == payload.user.telegram_id)
+async def create_receipt(
+    payload: ReceiptCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
+    user = current_user or await get_or_create_user(
+        db,
+        telegram_id=payload.user.telegram_id,
+        username=payload.user.username,
     )
-    user = user_result.scalar_one_or_none()
-
-    if user is None:
-        user = User(
-            telegram_id=payload.user.telegram_id,
-            username=payload.user.username,
-        )
-        db.add(user)
-        await db.flush()
-    elif payload.user.username and user.username != payload.user.username:
-        user.username = payload.user.username
 
     calculated_discount = sum((item.discount_amount for item in payload.items), Decimal("0"))
     calculated_store_cashback = sum(
@@ -1473,12 +2123,20 @@ async def create_receipt(payload: ReceiptCreate, db: AsyncSession = Depends(get_
 
 @app.get("/receipts")
 @app.get("/api/receipts")
-async def list_receipts(db: AsyncSession = Depends(get_db)):
-    receipts_result = await db.execute(
+async def list_receipts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
+    receipts_query = (
         select(Receipt)
         .options(selectinload(Receipt.items))
         .order_by(Receipt.receipt_datetime.desc().nullslast(), Receipt.created_at.desc())
         .limit(50)
+    )
+    if current_user is not None:
+        receipts_query = receipts_query.where(Receipt.user_id == current_user.id)
+    receipts_result = await db.execute(
+        receipts_query
     )
     receipts = receipts_result.scalars().all()
 
@@ -1608,12 +2266,20 @@ def receipt_detail_payload(receipt: Receipt):
 
 @app.get("/receipts/latest")
 @app.get("/api/receipts/latest")
-async def latest_receipt(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
+async def latest_receipt(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
+    receipt_query = (
         select(Receipt)
         .options(selectinload(Receipt.items).selectinload(ReceiptItem.product))
         .order_by(Receipt.receipt_datetime.desc().nullslast(), Receipt.created_at.desc())
         .limit(1)
+    )
+    if current_user is not None:
+        receipt_query = receipt_query.where(Receipt.user_id == current_user.id)
+    result = await db.execute(
+        receipt_query
     )
     receipt = result.scalar_one_or_none()
     if receipt is None:
@@ -1623,11 +2289,20 @@ async def latest_receipt(db: AsyncSession = Depends(get_db)):
 
 @app.get("/receipts/{receipt_id}")
 @app.get("/api/receipts/{receipt_id}")
-async def get_receipt(receipt_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
+async def get_receipt(
+    receipt_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
+    receipt_query = (
         select(Receipt)
         .options(selectinload(Receipt.items).selectinload(ReceiptItem.product))
         .where(Receipt.id == receipt_id)
+    )
+    if current_user is not None:
+        receipt_query = receipt_query.where(Receipt.user_id == current_user.id)
+    result = await db.execute(
+        receipt_query
     )
     receipt = result.scalar_one_or_none()
     if receipt is None:
@@ -1637,8 +2312,12 @@ async def get_receipt(receipt_id: int, db: AsyncSession = Depends(get_db)):
 
 @app.post("/receipt-scans", response_model=ReceiptScanCreated)
 @app.post("/api/receipt-scans", response_model=ReceiptScanCreated)
-async def create_receipt_scan(payload: ReceiptScanCreate, db: AsyncSession = Depends(get_db)):
-    user = await get_or_create_user(
+async def create_receipt_scan(
+    payload: ReceiptScanCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
+    user = current_user or await get_or_create_user(
         db,
         telegram_id=payload.user.telegram_id,
         username=payload.user.username,
@@ -1664,9 +2343,10 @@ async def upload_receipt_scan(
     telegram_id: int = Form(1001),
     username: str | None = Form("demo"),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
 ):
     public_url, content_type, image_bytes = await save_receipt_upload(image)
-    user = await get_or_create_user(db, telegram_id=telegram_id, username=username)
+    user = current_user or await get_or_create_user(db, telegram_id=telegram_id, username=username)
 
     job = ReceiptOcrJob(
         user_id=user.id,
@@ -2106,6 +2786,105 @@ def receipt_observed_price_payload(item: ReceiptItem, receipt: Receipt) -> dict:
     }
 
 
+def receipt_store_map_payload(
+    *,
+    store_key: str,
+    store_name: str,
+    entries: list[tuple[ReceiptItem, Receipt]],
+    location: RetailStoreLocation | None = None,
+) -> dict:
+    sorted_entries = sorted(entries, key=lambda row: receipt_date(row[1]), reverse=True)
+    latest_item, latest_receipt = sorted_entries[0]
+    previous_item = sorted_entries[1][0] if len(sorted_entries) > 1 else latest_item
+    price = to_decimal(latest_item.price)
+    previous_price = to_decimal(previous_item.price)
+    change = price - previous_price
+    logo, logo_text = logo_for(store_name)
+    retailer = display_store_name(store_name)
+    chain_key = retailer_key_for_store(store_name)
+
+    return {
+        "storeId": f"receipt:{store_key}",
+        "retailer": retailer,
+        "chainKey": chain_key,
+        "name": location.store_name if location and location.store_name else retailer,
+        "address": location.address_raw if location else "Магазин з чеку",
+        "city": location.city if location else "Київська область",
+        "latitude": location.lat if location else None,
+        "longitude": location.lon if location else None,
+        "hasCoordinates": bool(location and location.lat is not None and location.lon is not None),
+        "coordinateStatus": location.coordinate_status if location else "receipt_without_location",
+        "logo": logo,
+        "logoText": logo_text,
+        "logoUrl": store_logo_url(store_name),
+        "distance": None,
+        "workingHours": None,
+        "phone": None,
+        "price": money(price, latest_receipt.currency),
+        "priceValue": float(price),
+        "currency": latest_receipt.currency,
+        "change": signed_money(change),
+        "changeDirection": "down" if change <= 0 else "up",
+        "priceSource": "receipt",
+        "priceSourceLabel": "чек",
+        "availability": "observed_in_receipt",
+        "receiptId": latest_receipt.id,
+        "receiptCount": len({receipt.id for _, receipt in entries}),
+        "observedAt": ui_datetime(receipt_date(latest_receipt)),
+        "quantity": float(to_decimal(latest_item.quantity)),
+        "unit": latest_item.unit or "шт",
+    }
+
+
+STORE_LOCATION_MOCK_PRICES = [
+    Decimal("24.60"),
+    Decimal("24.70"),
+    Decimal("24.90"),
+    Decimal("25.00"),
+    Decimal("25.10"),
+    Decimal("25.20"),
+    Decimal("25.40"),
+    Decimal("25.70"),
+]
+
+
+def mock_location_price(index: int, currency: str = "UAH") -> dict:
+    value = STORE_LOCATION_MOCK_PRICES[index % len(STORE_LOCATION_MOCK_PRICES)]
+    return {
+        "price": money(value, currency),
+        "priceValue": float(value),
+        "priceSource": "mock_fallback",
+        "priceSourceLabel": "MVP fallback",
+        "availability": "unknown",
+    }
+
+
+def retail_location_payload(location: RetailStoreLocation, index: int) -> dict:
+    logo, logo_text = logo_for(location.chain_name)
+    price_payload = mock_location_price(index)
+    has_coordinates = location.lat is not None and location.lon is not None
+
+    return {
+        "storeId": location.id,
+        "retailer": location.chain_name,
+        "chainKey": location.chain_key,
+        "name": location.store_name or location.chain_name,
+        "address": location.address_raw,
+        "city": location.city,
+        "latitude": location.lat,
+        "longitude": location.lon,
+        "hasCoordinates": has_coordinates,
+        "coordinateStatus": location.coordinate_status,
+        "logo": logo,
+        "logoText": logo_text,
+        "logoUrl": store_logo_url(location.chain_name),
+        "distance": None,
+        "workingHours": None,
+        "phone": None,
+        **price_payload,
+    }
+
+
 async def latest_official_prices_for_product(db: AsyncSession, product_id: int) -> list[ProductPrice]:
     result = await db.execute(
         select(ProductPrice)
@@ -2142,17 +2921,208 @@ async def list_stores(db: AsyncSession = Depends(get_db)):
     }
 
 
+@app.get("/business/geography-units")
+@app.get("/api/business/geography-units")
+async def business_geography_units(
+    level: str,
+    q: str = "",
+    region: str = "",
+    community: str = "",
+    limit: int = 40,
+    db: AsyncSession = Depends(get_db),
+):
+    if level not in {"region", "community", "city"}:
+        raise HTTPException(status_code=400, detail="Unsupported geography level")
+
+    capped_limit = min(max(limit, 1), 80)
+    if level == "city":
+        stmt = select(AdminGeoUnit).where(
+            or_(
+                AdminGeoUnit.level == "city",
+                AdminGeoUnit.type_name.ilike("%місто зі спеціальним статусом%"),
+            )
+        )
+    else:
+        stmt = select(AdminGeoUnit).where(AdminGeoUnit.level == level)
+
+    query = q.strip()
+    if query:
+        query_pattern = f"%{query}%"
+        prefix_pattern = f"{query}%"
+        stmt = stmt.where(
+            or_(
+                AdminGeoUnit.name.ilike(query_pattern),
+                AdminGeoUnit.search_text.ilike(query_pattern),
+            )
+        )
+        order_by = (
+            case(
+                (func.lower(AdminGeoUnit.name) == query.lower(), 0),
+                (AdminGeoUnit.name.ilike(prefix_pattern), 1),
+                (AdminGeoUnit.name.ilike(query_pattern), 2),
+                else_=3,
+            ),
+            AdminGeoUnit.name,
+        )
+    else:
+        order_by = (AdminGeoUnit.name,)
+
+    if level in {"community", "city"} and region:
+        stmt = stmt.where(AdminGeoUnit.region_code == region)
+
+    if level == "city" and community:
+        stmt = stmt.where(AdminGeoUnit.community_code == community)
+
+    result = await db.execute(stmt.order_by(*order_by).limit(capped_limit))
+    return {
+        "items": [
+            geo_unit_payload(unit)
+            for unit in result.scalars().all()
+        ]
+    }
+
+
+@app.get("/business/category-units")
+@app.get("/api/business/category-units")
+async def business_category_units(
+    level: str,
+    q: str = "",
+    category: str = "all",
+    brand: str = "",
+    limit: int = 40,
+    db: AsyncSession = Depends(get_db),
+):
+    if level not in {"category", "brand", "product"}:
+        raise HTTPException(status_code=400, detail="Unsupported category level")
+
+    capped_limit = min(max(limit, 1), 80)
+    query = q.strip().lower()
+    rows = await fetch_item_rows(db)
+    items = []
+
+    if level == "category":
+        seen_categories = {}
+        for item, _ in rows:
+            item_category = normalize_category(item.category, raw_name=item.raw_name, item_name=item.item_name)
+            if query and query not in item_category.name.lower():
+                continue
+            seen_categories[item_category.key] = item_category
+
+        items = [
+            business_category_unit_payload(category.key, category.name, "category")
+            for category in PRODUCT_CATEGORIES.values()
+            if category.key in seen_categories
+        ]
+
+    if level == "brand":
+        category_key = sanitize_business_category(category)
+        seen_brands = set()
+        for item, _ in rows:
+            if category_key != "all":
+                item_category = normalize_category(item.category, raw_name=item.raw_name, item_name=item.item_name)
+                if item_category.key != category_key:
+                    continue
+
+            item_brand = (item.brand or getattr(item.product, "brand", None) or "").strip()
+            if not item_brand:
+                continue
+            if query and query not in item_brand.lower():
+                continue
+            seen_brands.add(item_brand)
+
+        items = [
+            business_category_unit_payload(value, value, "brand", category=category_key)
+            for value in sorted(seen_brands, key=str.lower)
+        ]
+
+    if level == "product":
+        category_key = sanitize_business_category(category)
+        brand_value = sanitize_business_text_filter(brand)
+        seen_products = {}
+        for item, _ in rows:
+            if not item.product_id or not item.product:
+                continue
+
+            if category_key != "all":
+                item_category = normalize_category(
+                    item.category,
+                    raw_name=item.raw_name,
+                    item_name=item.item_name,
+                    product_category=item.product.category,
+                )
+                if item_category.key != category_key:
+                    continue
+
+            item_brand = (item.brand or item.product.brand or "").strip()
+            if brand_value and item_brand != brand_value:
+                continue
+            if query and query not in item.product.name.lower():
+                continue
+            seen_products[item.product_id] = item.product
+
+        items = [
+            business_category_unit_payload(
+                str(product.id),
+                product.name,
+                "product",
+                category=normalize_category(product.category, raw_name=product.name, item_name=product.name).key,
+                brand=product.brand or "",
+            )
+            for product in sorted(seen_products.values(), key=lambda item: item.name.lower())
+        ]
+
+    return {"items": items[:capped_limit]}
+
+
 @app.get("/business/overview")
 @app.get("/api/business/overview")
-async def business_overview(db: AsyncSession = Depends(get_db)):
-    since = period_cutoff("1m")
-    previous_since = since - timedelta(days=30)
-    current_rows = await fetch_item_rows(db, since=since)
-    previous_rows = [
+async def business_overview(
+    period: str = "1m",
+    category: str = "all",
+    retailer: str = "all",
+    geography: str = "ukraine",
+    geoRegion: str = "",
+    geoCommunity: str = "",
+    geoCity: str = "",
+    brand: str = "",
+    product: str = "",
+    db: AsyncSession = Depends(get_db),
+):
+    filter_context = business_filter_context(
+        period,
+        category,
+        retailer,
+        geography,
+        geo_region=geoRegion,
+        geo_community=geoCommunity,
+        geo_city=geoCity,
+        brand=brand,
+        product=product,
+    )
+    since = period_cutoff(filter_context["period"])
+    period_days = PERIOD_DAYS[filter_context["period"]]
+    comparison_label = f"до попер. {period_days} днів"
+    previous_since = since - timedelta(days=period_days)
+    all_current_rows = await fetch_item_rows(db, since=since)
+    current_rows = filter_business_rows(
+        all_current_rows,
+        category=filter_context["category"],
+        retailer=filter_context["retailer"],
+        brand=filter_context["brand"],
+        product=filter_context["product"],
+    )
+    all_previous_rows = [
         row
         for row in await fetch_item_rows(db, since=previous_since)
         if receipt_date(row[1]) < since
     ]
+    previous_rows = filter_business_rows(
+        all_previous_rows,
+        category=filter_context["category"],
+        retailer=filter_context["retailer"],
+        brand=filter_context["brand"],
+        product=filter_context["product"],
+    )
     current_total = receipt_sales_total(current_rows)
     previous_total = receipt_sales_total(previous_rows)
     receipt_ids = {receipt.id for _, receipt in current_rows}
@@ -2174,16 +3144,27 @@ async def business_overview(db: AsyncSession = Depends(get_db)):
         category = normalize_category(item.category, raw_name=item.raw_name, item_name=item.item_name)
         category_totals[category.name] += item_net_total(item)
     top_category = max(category_totals, key=category_totals.get, default="Усі категорії")
+    geo_selection = await business_geography_selection(db, filter_context)
+    filter_options = business_filter_options(all_current_rows, filter_context)
+    filter_options["geoSelection"] = geo_selection
+    category_selection = business_category_selection(filter_context, all_current_rows)
+    filter_options["categorySelection"] = category_selection
 
     return {
-        "filters": business_filters_payload(top_category),
+        "filters": business_filters_payload(
+            category_selection["label"],
+            filter_context["periodLabel"],
+            filter_context["retailerLabel"],
+            geo_selection["label"],
+        ),
+        "filterOptions": filter_options,
         "kpis": {
             "sales": {
                 "label": "Продажі",
                 "value": business_money(current_total),
                 "change": signed_percent(sales_change),
-                "description": "до попер. 30 днів",
-                "meaning": "Сума позицій з чеків за останні 30 днів.",
+                "description": comparison_label,
+                "meaning": f"Сума позицій з чеків за останні {period_days} днів.",
                 "icon": "analytics",
                 "sparkline": business_sparkline([metric["amount"] for metric in stores[:8]]),
             },
@@ -2191,8 +3172,8 @@ async def business_overview(db: AsyncSession = Depends(get_db)):
                 "label": "Чеки",
                 "value": compact_number(receipt_count),
                 "change": signed_percent(receipts_change),
-                "description": "до попер. 30 днів",
-                "meaning": "Кількість чеків у базі за останні 30 днів.",
+                "description": comparison_label,
+                "meaning": f"Кількість чеків у базі за останні {period_days} днів.",
                 "icon": "receiptCheck",
                 "sparkline": business_sparkline([metric["receipts"] for metric in stores[:8]]),
             },
@@ -2201,7 +3182,7 @@ async def business_overview(db: AsyncSession = Depends(get_db)):
                 "value": money(average_receipt),
                 "subtitle": "за реальними чеками",
                 "change": signed_percent(average_change),
-                "description": "до попер. 30 днів",
+                "description": comparison_label,
                 "meaning": "Сума продажів / кількість чеків.",
                 "icon": "wallet",
                 "sparkline": business_sparkline([average_receipt, previous_average, current_total]),
@@ -2210,7 +3191,7 @@ async def business_overview(db: AsyncSession = Depends(get_db)):
                 "label": "Потенціал росту",
                 "value": business_money(growth_potential),
                 "subtitle": "простий прогноз з поточного тренду",
-                "tooltip": "Оцінка на базі зміни продажів за останні 30 днів.",
+                "tooltip": f"Оцінка на базі зміни продажів за останні {period_days} днів.",
                 "icon": "trendUp",
                 "sparkline": business_sparkline([previous_total, current_total, forecast_sales]),
             },
@@ -2232,7 +3213,7 @@ async def business_overview(db: AsyncSession = Depends(get_db)):
                 "icon": "mapPin",
                 "label": "Найбільший ритейлер за продажами",
                 "value": top_store,
-                "change": f"{business_money(stores[0]['amount']) if stores else money(0)} за 30 днів",
+                "change": f"{business_money(stores[0]['amount']) if stores else money(0)} за {period_days} днів",
                 "action": "Дивитись географію",
                 "href": "/business/geography",
             },
@@ -2248,7 +3229,7 @@ async def business_overview(db: AsyncSession = Depends(get_db)):
                 "icon": "trendUp",
                 "label": "Прогноз продажів на наступні 30 днів",
                 "value": business_money(forecast_sales),
-                "change": f"{signed_percent(sales_change)} до попер. 30 днів",
+                "change": f"{signed_percent(sales_change)} {comparison_label}",
                 "action": "Дивитись прогноз",
                 "href": "/business/forecast",
             },
@@ -2267,9 +3248,38 @@ async def business_overview(db: AsyncSession = Depends(get_db)):
 
 @app.get("/business/geography")
 @app.get("/api/business/geography")
-async def business_geography(db: AsyncSession = Depends(get_db)):
-    since = period_cutoff("1m")
-    current_rows = await fetch_item_rows(db, since=since)
+async def business_geography(
+    period: str = "1m",
+    category: str = "all",
+    retailer: str = "all",
+    geography: str = "ukraine",
+    geoRegion: str = "",
+    geoCommunity: str = "",
+    geoCity: str = "",
+    brand: str = "",
+    product: str = "",
+    db: AsyncSession = Depends(get_db),
+):
+    filter_context = business_filter_context(
+        period,
+        category,
+        retailer,
+        geography,
+        geo_region=geoRegion,
+        geo_community=geoCommunity,
+        geo_city=geoCity,
+        brand=brand,
+        product=product,
+    )
+    since = period_cutoff(filter_context["period"])
+    all_current_rows = await fetch_item_rows(db, since=since)
+    current_rows = filter_business_rows(
+        all_current_rows,
+        category=filter_context["category"],
+        retailer=filter_context["retailer"],
+        brand=filter_context["brand"],
+        product=filter_context["product"],
+    )
     stores = top_store_metrics(current_rows)
     total = sum((store["amount"] for store in stores), Decimal("0"))
     peak_hours = business_peak_hour_payload(current_rows)
@@ -2289,9 +3299,20 @@ async def business_geography(db: AsyncSession = Depends(get_db)):
                 "potential": "Високий" if index < 2 else "Середній",
             }
         )
+    geo_selection = await business_geography_selection(db, filter_context)
+    filter_options = business_filter_options(all_current_rows, filter_context)
+    filter_options["geoSelection"] = geo_selection
+    category_selection = business_category_selection(filter_context, all_current_rows)
+    filter_options["categorySelection"] = category_selection
 
     return {
-        "filters": business_filters_payload(),
+        "filters": business_filters_payload(
+            category_selection["label"],
+            filter_context["periodLabel"],
+            filter_context["retailerLabel"],
+            geo_selection["label"],
+        ),
+        "filterOptions": filter_options,
         "kpis": {
             "regionalSales": {
                 "label": "Продажі по ритейлерах",
@@ -2557,6 +3578,7 @@ async def product_price_comparison(
     product_id: int,
     period: str = "1m",
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
 ):
     since = period_cutoff(period)
     product_result = await db.execute(
@@ -2578,13 +3600,18 @@ async def product_price_comparison(
     )
     price_history = history_result.scalars().all()
 
-    receipt_result = await db.execute(
+    receipt_query = (
         select(ReceiptItem, Receipt)
         .join(Receipt, ReceiptItem.receipt_id == Receipt.id)
         .where(ReceiptItem.product_id == product_id)
         .where(Receipt.receipt_datetime >= since)
         .order_by(Receipt.receipt_datetime.desc().nullslast(), Receipt.created_at.desc())
     )
+    if current_user is not None:
+        receipt_query = receipt_query.where(
+            or_(Receipt.user_id == current_user.id, Receipt.user_id.is_(None))
+        )
+    receipt_result = await db.execute(receipt_query)
     receipt_rows = receipt_result.all()
 
     best_offer = min(official_latest, key=lambda price: to_decimal(price.price), default=None)
@@ -2612,11 +3639,149 @@ async def product_price_comparison(
     }
 
 
+@app.get("/products/{product_id:int}/store-prices-map")
+@app.get("/api/products/{product_id:int}/store-prices-map")
+async def product_store_prices_map(
+    product_id: int,
+    city: str = "Київ",
+    retailer: str = "all",
+    limit: int = 36,
+    db: AsyncSession = Depends(get_db),
+):
+    product_result = await db.execute(select(Product).where(Product.id == product_id))
+    product = product_result.scalar_one_or_none()
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    capped_limit = min(max(limit, 1), 80)
+    receipt_stmt = (
+        select(ReceiptItem, Receipt)
+        .join(Receipt, ReceiptItem.receipt_id == Receipt.id)
+        .where(ReceiptItem.product_id == product_id)
+        .where(Receipt.store.is_not(None))
+        .order_by(Receipt.receipt_datetime.desc().nullslast(), Receipt.created_at.desc())
+    )
+    receipt_result = await db.execute(receipt_stmt)
+    receipt_rows = [
+        (item, receipt)
+        for item, receipt in receipt_result.all()
+        if receipt.store and to_decimal(item.price) > 0
+    ]
+
+    grouped: dict[str, dict] = {}
+    for item, receipt in receipt_rows:
+        store_name = display_store_name(receipt.store)
+        chain_key = retailer_key_for_store(receipt.store)
+
+        group_key = normalize_name(receipt.store) or normalize_name(store_name) or str(receipt.id)
+        group = grouped.setdefault(
+            group_key,
+            {
+                "storeName": store_name,
+                "chainKey": chain_key,
+                "entries": [],
+            },
+        )
+        group["entries"].append((item, receipt))
+
+    filtered_grouped = {
+        key: group
+        for key, group in grouped.items()
+        if retailer == "all" or group["chainKey"] == retailer
+    }
+
+    location_result = await db.execute(
+        select(RetailStoreLocation).where(func.lower(RetailStoreLocation.city) == city.lower())
+    )
+    locations_by_chain: dict[str, list[RetailStoreLocation]] = defaultdict(list)
+    for location in location_result.scalars().all():
+        locations_by_chain[location.chain_key].append(location)
+
+    used_location_ids: set[int] = set()
+    stores = []
+    for index, (store_key, group) in enumerate(filtered_grouped.items()):
+        locations = locations_by_chain.get(group["chainKey"], [])
+        location = next(
+            (
+                item
+                for item in locations
+                if item.id not in used_location_ids
+                and item.lat is not None
+                and item.lon is not None
+            ),
+            None,
+        )
+        if location is not None:
+            used_location_ids.add(location.id)
+
+        stores.append(
+            receipt_store_map_payload(
+                store_key=store_key,
+                store_name=group["storeName"],
+                entries=group["entries"],
+                location=location,
+            )
+        )
+
+    stores = sorted(stores, key=lambda store: store["priceValue"])[:capped_limit]
+    best_price = stores[0] if stores else None
+    coordinate_count = sum(1 for store in stores if store["hasCoordinates"])
+
+    retailer_counts_by_key: dict[str, dict] = {}
+    for group in grouped.values():
+        chain_key = group["chainKey"]
+        retailer_name = group["storeName"]
+        bucket = retailer_counts_by_key.setdefault(
+            chain_key,
+            {"key": chain_key, "name": retailer_name, "count": 0},
+        )
+        bucket["count"] += 1
+
+    retailers = sorted(
+        retailer_counts_by_key.values(),
+        key=lambda value: value["name"],
+    )
+
+    return {
+        "product": {"id": product.id, "name": product.name},
+        "city": city,
+        "center": {"lat": 50.4501, "lng": 30.5234, "source": "city_default"},
+        "mapStatus": "ready" if stores else "missing_receipts",
+        "coordinateNotice": (
+            "Для частини магазинів у чеках немає точної адреси/координат. "
+            "Такі точки тимчасово розміщуються приблизно в межах області."
+        )
+        if not coordinate_count
+        else "",
+        "priceLayer": {
+            "source": "receipt_observed",
+            "label": "Ціни з чеків",
+            "notice": (
+                "На мапі показані тільки магазини, де цей продукт був знайдений "
+                "у відсканованих чеках. Якщо чека з товаром немає, магазин не показується."
+            ),
+        },
+        "summary": {
+            "storesCount": len(grouped),
+            "displayedStoresCount": len(stores),
+            "storesWithCoordinates": coordinate_count,
+            "bestPrice": best_price["price"] if best_price else None,
+            "bestRetailer": best_price["retailer"] if best_price else None,
+        },
+        "retailers": retailers,
+        "stores": stores,
+    }
+
+
 @app.get("/analytics/categories")
 @app.get("/api/analytics/categories")
-async def analytics_categories(period: str = "1m", db: AsyncSession = Depends(get_db)):
+async def analytics_categories(
+    period: str = "1m",
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
+):
     since = period_cutoff(period)
-    rows = await fetch_item_rows(db, since=since)
+    rows = await fetch_item_rows(db, since=since, user_id=current_user.id if current_user else None)
     total = sum(
         (item_net_total(item) for item, _ in rows),
         Decimal("0"),
@@ -2683,13 +3848,14 @@ async def analytics_category_detail(
     category_key: str,
     period: str = "1m",
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(optional_current_user),
 ):
     if category_key not in PRODUCT_CATEGORIES:
         raise HTTPException(status_code=404, detail="Category not found")
 
     selected_category = get_category(category_key)
     since = period_cutoff(period)
-    rows = await fetch_item_rows(db, since=since)
+    rows = await fetch_item_rows(db, since=since, user_id=current_user.id if current_user else None)
     overall_total = sum((item_net_total(item) for item, _ in rows), Decimal("0"))
 
     category_rows = []

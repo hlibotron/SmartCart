@@ -113,6 +113,18 @@ function renderStat(stat) {
   `;
 }
 
+function visibleCategoryStats() {
+  const stats = categoryData.stats.length
+    ? categoryData.stats
+    : [
+        { label: "Товарів", value: categoryData.summary.items, icon: "basket" },
+        { label: "Чеків", value: categoryData.summary.receipts, icon: "receipt" },
+        { label: "Середній товар", value: categoryData.summary.averageItem, icon: "tag" },
+      ];
+
+  return stats.filter((stat) => stat.label !== "Витрачено");
+}
+
 function renderProductThumb(product) {
   const visual = product.visual ?? {};
   const imageUrl = assetUrl(visual.url || "");
@@ -196,17 +208,7 @@ export function renderAnalyticsCategoryPage() {
       ${renderCategoryHero()}
 
       <section class="analytics-category-stats" aria-label="Показники категорії">
-        ${(categoryData.stats.length
-          ? categoryData.stats
-          : [
-              { label: "Витрачено", value: categoryData.summary.total, icon: "wallet" },
-              { label: "Товарів", value: categoryData.summary.items, icon: "basket" },
-              { label: "Чеків", value: categoryData.summary.receipts, icon: "receipt" },
-              { label: "Середній товар", value: categoryData.summary.averageItem, icon: "tag" },
-            ]
-        )
-          .map(renderStat)
-          .join("")}
+        ${visibleCategoryStats().map(renderStat).join("")}
       </section>
 
       <section class="analytics-category-section" aria-labelledby="analytics-category-products">

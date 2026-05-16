@@ -22,6 +22,8 @@ const icons = {
   chevron: '<path d="m9 18 6-6-6-6" />',
   chevronDown: '<path d="m6 9 6 6 6-6" />',
   clock: '<circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />',
+  creditCard:
+    '<rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h3" />',
   dashboard: '<rect x="4" y="4" width="6" height="6" rx="1.4" /><rect x="14" y="4" width="6" height="6" rx="1.4" /><rect x="4" y="14" width="6" height="6" rx="1.4" /><rect x="14" y="14" width="6" height="6" rx="1.4" />',
   download: '<path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />',
   gift:
@@ -32,6 +34,9 @@ const icons = {
   info: '<circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" />',
   jar:
     '<path d="M8 2h8v4l-1.5 2v11a3 3 0 0 1-3 3h-1a3 3 0 0 1-3-3V8L8 6z" /><path d="M8 6h8M8 12h8" />',
+  lock:
+    '<rect x="5" y="10" width="14" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /><path d="M12 14v2" />',
+  logOut: '<path d="M10 17l5-5-5-5" /><path d="M15 12H3" /><path d="M21 5v14" />',
   meat:
     '<path d="M8.5 18.5c-3.2-1.2-4.8-3.4-4.2-6.1.7-3.3 4.5-4.8 8.2-4.2l2.2-2.2a3 3 0 1 1 4.3 4.3l-2.2 2.2c.6 3.7-.9 7.5-4.2 8.2-1.5.3-2.9-.1-4.1-2.2Z" /><path d="M8 14h.01" />',
   helpCircle: '<circle cx="12" cy="12" r="9" /><path d="M9.2 9a3 3 0 1 1 4.7 2.5c-1 .7-1.9 1.2-1.9 2.5" /><path d="M12 17h.01" />',
@@ -52,6 +57,8 @@ const icons = {
   search: '<circle cx="11" cy="11" r="7" /><path d="m20 20-3.8-3.8" />',
   settings:
     '<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" /><path d="M19.4 15a1.8 1.8 0 0 0 .4 2l.1.1a2.1 2.1 0 0 1-3 3l-.1-.1a1.8 1.8 0 0 0-2-.4 1.8 1.8 0 0 0-1.1 1.7V21a2.1 2.1 0 0 1-4.2 0v-.2a1.8 1.8 0 0 0-1.1-1.7 1.8 1.8 0 0 0-2 .4l-.1.1a2.1 2.1 0 0 1-3-3l.1-.1a1.8 1.8 0 0 0 .4-2 1.8 1.8 0 0 0-1.7-1.1H2a2.1 2.1 0 0 1 0-4.2h.2a1.8 1.8 0 0 0 1.7-1.1 1.8 1.8 0 0 0-.4-2l-.1-.1a2.1 2.1 0 0 1 3-3l.1.1a1.8 1.8 0 0 0 2 .4 1.8 1.8 0 0 0 1.1-1.7V2a2.1 2.1 0 0 1 4.2 0v.2a1.8 1.8 0 0 0 1.1 1.7 1.8 1.8 0 0 0 2-.4l.1-.1a2.1 2.1 0 0 1 3 3l-.1.1a1.8 1.8 0 0 0-.4 2 1.8 1.8 0 0 0 1.7 1.1h.2a2.1 2.1 0 0 1 0 4.2h-.2a1.8 1.8 0 0 0-1.8 1.2Z" />',
+  shield:
+    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="m9 12 2 2 4-5" />',
   shoppingBag:
     '<path d="M6 8h12l-1 13H7z" /><path d="M9 8a3 3 0 0 1 6 0" />',
   sliders:

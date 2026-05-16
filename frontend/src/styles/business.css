@@ -171,8 +171,13 @@
 
 .business-filter-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(178px, 1fr));
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
   gap: 0;
+  min-width: 0;
+}
+
+.business-filter-item {
+  position: relative;
   min-width: 0;
 }
 
@@ -181,6 +186,7 @@
   grid-template-columns: 36px minmax(0, 1fr) 20px;
   align-items: center;
   gap: 12px;
+  width: 100%;
   min-height: 64px;
   padding: 10px 16px;
   border: 1px solid var(--sc-border);
@@ -192,13 +198,19 @@
   cursor: pointer;
 }
 
-.business-filter-card:first-child {
+.business-filter-item:first-child .business-filter-card {
   border-left-width: 1px;
   border-radius: 8px 0 0 8px;
 }
 
-.business-filter-card:last-child {
+.business-filter-item:last-child .business-filter-card {
   border-radius: 0 8px 8px 0;
+}
+
+.business-filter-card[aria-expanded="true"] {
+  position: relative;
+  z-index: 21;
+  border-color: rgba(22, 163, 74, 0.36);
 }
 
 .business-filter-icon {
@@ -235,6 +247,173 @@
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.business-filter-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  display: grid;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--sc-border);
+  border-radius: 10px;
+  background: var(--sc-card);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
+}
+
+.business-filter-menu--geo,
+.business-filter-menu--cascade {
+  right: auto;
+  width: min(760px, calc(100vw - 56px));
+}
+
+.business-filter-menu[hidden] {
+  display: none;
+}
+
+.business-filter-option {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--sc-text);
+  font-size: 13px;
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+}
+
+.business-filter-option:hover,
+.business-filter-option.active {
+  background: #eefbf3;
+  color: var(--sc-green-dark);
+}
+
+.business-filter-option--country {
+  margin-bottom: 6px;
+}
+
+.business-geo-filter-levels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.business-geo-filter-level {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.88);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.business-geo-filter-level header {
+  display: grid;
+  gap: 2px;
+}
+
+.business-geo-filter-level header strong {
+  color: var(--sc-text);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.business-geo-filter-level header small {
+  min-height: 14px;
+  overflow: hidden;
+  color: var(--sc-green-dark);
+  font-size: 11px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.business-geo-search {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--sc-border);
+  border-radius: 8px;
+  background: var(--sc-card);
+  color: #64748b;
+}
+
+.business-geo-search svg {
+  width: 16px;
+  height: 16px;
+}
+
+.business-geo-search input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--sc-text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.business-geo-results {
+  display: grid;
+  gap: 4px;
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.business-geo-results > span {
+  padding: 8px 4px;
+  color: var(--sc-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.business-geo-result {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 42px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--sc-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.business-geo-result:hover {
+  background: #eefbf3;
+}
+
+.business-geo-result strong,
+.business-geo-result small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.business-geo-result strong {
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.business-geo-result small {
+  color: var(--sc-muted);
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .business-top-actions {
@@ -327,7 +506,7 @@
 .business-overview-main h1 {
   margin: 4px 0 0;
   color: #06112b;
-  font-size: 34px;
+  font-size: 32px;
   font-weight: 930;
   line-height: 1.05;
   letter-spacing: 0;
@@ -336,7 +515,7 @@
 .business-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .business-kpi-card,
@@ -351,22 +530,22 @@
 .business-kpi-card {
   position: relative;
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr) 70px;
-  gap: 16px;
+  grid-template-columns: 54px minmax(0, 1fr) 62px;
+  gap: 14px;
   align-items: center;
-  min-height: 136px;
-  padding: 22px;
+  min-height: 124px;
+  padding: 18px;
   overflow: hidden;
 }
 
 .business-kpi-card.no-sparkline {
-  grid-template-columns: 62px minmax(0, 1fr);
+  grid-template-columns: 54px minmax(0, 1fr);
 }
 
 .business-kpi-icon {
   display: grid;
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   place-items: center;
   border-radius: 50%;
   background: var(--sc-green-soft);
@@ -374,8 +553,8 @@
 }
 
 .business-kpi-icon svg {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
 }
 
 .business-kpi-copy {
@@ -389,7 +568,7 @@
   align-items: center;
   gap: 7px;
   color: var(--sc-text);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
 }
 
@@ -407,10 +586,12 @@
 }
 
 .business-kpi-copy strong {
+  overflow: hidden;
   color: #07122d;
-  font-size: 28px;
+  font-size: 25px;
   font-weight: 920;
   line-height: 1;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -429,7 +610,7 @@
 }
 
 .business-kpi-sparkline {
-  width: 70px;
+  width: 62px;
   height: 34px;
   color: var(--sc-green);
 }
@@ -442,16 +623,16 @@
 
 .business-summary-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.22fr);
+  gap: 12px;
 }
 
 .business-overview-card {
   display: flex;
   min-width: 0;
-  min-height: 300px;
+  min-height: 286px;
   flex-direction: column;
-  padding: 18px;
+  padding: 16px;
 }
 
 .business-overview-card header {
@@ -500,7 +681,7 @@
 
 .business-card-metrics {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .business-card-metrics span {
@@ -522,10 +703,13 @@
 }
 
 .business-card-metrics strong {
+  overflow: hidden;
   color: var(--sc-text);
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 920;
   line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .business-card-metrics .positive {
@@ -720,8 +904,8 @@
 
 .business-summary-row {
   display: grid;
-  grid-template-columns: minmax(280px, 1.15fr) minmax(190px, 0.9fr) minmax(230px, 0.9fr) minmax(190px, auto);
-  gap: 18px;
+  grid-template-columns: minmax(230px, 1.2fr) minmax(128px, 0.7fr) minmax(168px, 0.9fr) minmax(152px, auto);
+  gap: 14px;
   align-items: center;
   min-height: 52px;
   padding: 0 20px;
@@ -1765,6 +1949,20 @@
   }
 }
 
+@media (max-width: 1180px) {
+  .business-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .business-filter-card,
+  .business-filter-item:first-child .business-filter-card,
+  .business-filter-item:last-child .business-filter-card {
+    border-left-width: 1px;
+    border-radius: 8px;
+  }
+}
+
 @media (max-width: 1040px) {
   .business-overview-shell {
     grid-template-columns: 76px minmax(0, 1fr);
@@ -2090,6 +2288,15 @@
   .business-filter-card {
     border-left-width: 1px;
     border-radius: 8px;
+  }
+
+  .business-filter-menu--geo,
+  .business-filter-menu--cascade {
+    width: min(100%, calc(100vw - 32px));
+  }
+
+  .business-geo-filter-levels {
+    grid-template-columns: 1fr;
   }
 
   .business-top-actions {

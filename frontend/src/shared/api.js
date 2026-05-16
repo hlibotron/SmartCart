@@ -1,9 +1,38 @@
-const BACKEND_ORIGIN = "http://127.0.0.1:8000";
+import { authHeaders } from "./authSession.js";
+
+const DEFAULT_BACKEND_ORIGIN = "http://127.0.0.1:8000";
+const configuredBackendOrigin = (import.meta.env.VITE_API_ORIGIN || "").replace(/\/$/, "");
+
+export function apiOrigin() {
+  if (configuredBackendOrigin) {
+    return configuredBackendOrigin;
+  }
+
+  if (
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname === "localhost"
+  ) {
+    return DEFAULT_BACKEND_ORIGIN;
+  }
+
+  return "";
+}
+
+export function apiUrl(path) {
+  if (!path || /^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const origin = apiOrigin();
+  return origin ? `${origin}${normalizedPath}` : normalizedPath;
+}
 
 export async function fetchJson(path) {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     headers: {
       Accept: "application/json",
+      ...authHeaders(),
     },
   });
 
@@ -32,11 +61,7 @@ export function assetUrl(path) {
     return path;
   }
 
-  if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") {
-    return `${BACKEND_ORIGIN}${normalizedPath}`;
-  }
-
-  return normalizedPath;
+  return apiUrl(normalizedPath);
 }
 
 export function rerenderRoute() {

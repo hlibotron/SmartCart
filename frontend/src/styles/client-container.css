@@ -282,16 +282,6 @@
     box-shadow: 0 12px 28px rgba(16, 19, 34, 0.075);
   }
 
-  .product-card::before {
-    content: "";
-    position: absolute;
-    top: 18px;
-    right: 86px;
-    bottom: 44px;
-    width: 1px;
-    background: var(--border);
-  }
-
   .product-card:first-child,
   .product-card:last-child {
     border-radius: 18px;
@@ -483,9 +473,9 @@
 
   .receipt-item-card {
     grid-template-areas:
-      "product product total"
-      "discount store smartcart";
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+      "product product"
+      "total smartcart";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px 6px;
     min-height: 0;
     padding: 12px 10px 10px;
@@ -525,10 +515,11 @@
   }
 
   .receipt-item-cell {
+    display: grid;
     min-width: 0;
-    min-height: 68px;
-    padding: 8px 6px;
-    border-left: 0;
+    min-height: 74px;
+    padding: 8px 10px;
+    align-items: stretch;
     border-radius: 12px;
     background: #f9fafb;
   }
@@ -536,26 +527,9 @@
   .receipt-item-total {
     grid-area: total;
     min-height: 0;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 6px;
-    padding: 0 0 10px 8px;
-    border-bottom: 1px solid var(--border);
-    border-left: 1px solid var(--border);
-    border-radius: 0;
-    background: transparent;
+    border: 1px solid rgba(229, 231, 235, 0.92);
+    background: #f8fafc;
     text-align: left;
-  }
-
-  .receipt-detail-pill--discount {
-    grid-area: discount;
-    background: #fffaf6;
-  }
-
-  .receipt-detail-pill--store-cashback {
-    grid-area: store;
-    background: #f8fbf9;
   }
 
   .receipt-detail-pill--smartcart {
@@ -564,35 +538,12 @@
     background: #f1fbf5;
   }
 
-  .receipt-detail-pill--discount > span,
-  .receipt-detail-pill--store-cashback > span,
   .receipt-detail-pill--smartcart > span {
     display: grid;
-    grid-template-rows: 26px auto auto;
+    grid-template-rows: 28px 32px;
     height: 100%;
     min-width: 0;
-  }
-
-  .receipt-detail-pill--store-cashback > span {
-    grid-template-columns: minmax(0, auto) auto;
-    grid-template-rows: 26px auto;
-    justify-content: center;
-    column-gap: 5px;
-  }
-
-  .receipt-detail-pill--store-cashback small {
-    grid-column: 1 / -1;
-  }
-
-  .receipt-detail-pill--store-cashback strong {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .receipt-detail-pill--store-cashback em {
-    grid-column: 2;
-    grid-row: 2;
-    align-self: center;
+    gap: 0;
   }
 
   .receipt-item-cell strong,
@@ -623,32 +574,31 @@
   }
 
   .receipt-item-cell > span,
-  .receipt-detail-pill--store-cashback > span,
   .receipt-detail-pill--smartcart > span {
     align-items: center;
+    gap: 0;
     text-align: center;
   }
 
-  .receipt-detail-pill--discount small,
-  .receipt-detail-pill--store-cashback small,
+  .receipt-item-total > span {
+    display: grid;
+    grid-template-rows: 28px 32px;
+    height: 100%;
+    min-width: 0;
+    align-items: center;
+    justify-items: start;
+    text-align: left;
+  }
+
   .receipt-detail-pill--smartcart small {
     display: flex;
-    min-height: 26px;
+    min-height: 28px;
     align-items: center;
     justify-content: center;
   }
 
-  .receipt-detail-pill--discount small + strong,
-  .receipt-detail-pill--store-cashback small + strong,
   .receipt-detail-pill--smartcart small + strong {
-    margin-top: 5px;
-  }
-
-  .receipt-detail-pill--store-cashback em {
     margin-top: 0;
-    min-height: 20px;
-    padding-inline: 6px;
-    font-size: 10px;
   }
 
   .receipt-detail-pill--smartcart strong:not(.muted-value) {

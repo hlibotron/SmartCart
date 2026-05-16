@@ -1,15 +1,33 @@
 import "./styles/main.css";
 import { navigationItems } from "./data/navigation.js";
 import { routes } from "./router.js";
+import { apiUrl } from "./shared/api.js";
+import { authHeaders, isAuthenticated } from "./shared/authSession.js";
 import { cartIcon, icon } from "./shared/icons.js";
 import { appHref, stripBasePath } from "./shared/navigation.js";
+import { hasCompletedOnboarding } from "./shared/onboarding.js";
 
 const app = document.querySelector("#app");
 
 const pageTitle = document.title;
 
 function getRoute(pathname = window.location.pathname) {
-  return routes[stripBasePath(pathname)] ?? routes["/"];
+  const routePath = stripBasePath(pathname);
+  const route = routes[routePath] ?? routes["/"];
+
+  if (routePath === "/" && !hasCompletedOnboarding()) {
+    return routes["/onboarding"];
+  }
+
+  if (route.authOnly && isAuthenticated()) {
+    return routes["/profile"];
+  }
+
+  if (route.requiresAuth && !isAuthenticated()) {
+    return routes["/login"];
+  }
+
+  return route;
 }
 
 function renderDemoSwitcher() {
@@ -25,17 +43,35 @@ function renderDemoSwitcher() {
   `;
 }
 
+function currentBackPath(route) {
+  if (route.path === "/stores-map") {
+    const params = new URLSearchParams(window.location.search);
+    const productId = params.get("productId");
+    const product = params.get("product");
+
+    if (productId) {
+      return `/product-price?productId=${encodeURIComponent(productId)}`;
+    }
+    if (product) {
+      return `/product-price?product=${encodeURIComponent(product)}`;
+    }
+  }
+
+  return route.backPath;
+}
+
 function renderHeader(route) {
   const profileActive = (route.navPath ?? route.path) === "/profile";
+  const backPath = currentBackPath(route);
 
   return `
     <header class="top" aria-label="Верхня панель">
       ${renderDemoSwitcher()}
-      <div class="brand-row${route.backPath ? " has-back" : ""}">
+      <div class="brand-row${backPath ? " has-back" : ""}">
         ${
-          route.backPath
+          backPath
             ? `
-              <a class="back-button interactive" href="${appHref(route.backPath)}" data-link aria-label="Назад">
+              <a class="back-button interactive" href="${appHref(backPath)}" data-link aria-label="Назад">
                 ${icon("arrowLeft")}
               </a>
             `
@@ -94,6 +130,7 @@ function renderBottomNav(activePath) {
               href="${appHref(item.path)}"
               data-link
               data-page="${item.label}"
+              data-nav-path="${item.path}"
               ${active ? 'aria-current="page"' : ""}
             >
               ${icon(item.icon)}
@@ -122,6 +159,16 @@ function renderBusinessShell(route) {
   `;
 }
 
+function renderOnboardingShell(route) {
+  return `
+    <div class="onboarding-shell">
+      <main id="page" tabindex="-1">
+        ${route.render()}
+      </main>
+    </div>
+  `;
+}
+
 function renderApp() {
   const route = getRoute();
 
@@ -129,6 +176,8 @@ function renderApp() {
   app.innerHTML =
     route.layout === "business"
       ? renderBusinessShell(route)
+      : route.layout === "onboarding"
+        ? renderOnboardingShell(route)
       : `
       <div class="app-shell">
         <div class="phone-frame">
@@ -172,8 +221,11 @@ async function uploadReceiptPhoto(file) {
   const formData = new FormData();
   formData.append("image", file);
 
-  const response = await fetch("/api/receipt-scans/upload", {
+  const response = await fetch(apiUrl("/api/receipt-scans/upload"), {
     method: "POST",
+    headers: {
+      ...authHeaders(),
+    },
     body: formData,
   });
 

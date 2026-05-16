@@ -1,6 +1,7 @@
 .receipt-summary-page h1 {
-  margin-bottom: 20px;
-  font-size: 40px;
+  margin-bottom: 18px;
+  font-size: 37px;
+  line-height: 1;
 }
 
 .receipt-overview-card {
@@ -13,8 +14,8 @@
 
 .receipt-store-row {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr) auto;
-  gap: 14px;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 12px;
   align-items: center;
   padding: 2px 0 14px;
   border-bottom: 1px solid rgba(22, 163, 74, 0.16);
@@ -22,8 +23,8 @@
 
 .receipt-summary-logo {
   display: grid;
-  width: 58px;
-  height: 58px;
+  width: 56px;
+  height: 56px;
   place-items: center;
   overflow: hidden;
   border-radius: 13px;
@@ -63,7 +64,7 @@
   display: block;
   overflow: hidden;
   color: #101322;
-  font-size: 23px;
+  font-size: 21px;
   font-weight: 900;
   line-height: 1.05;
   text-overflow: ellipsis;
@@ -112,7 +113,7 @@
 
 .receipt-overview-total {
   display: flex;
-  min-width: 106px;
+  min-width: 92px;
   flex-direction: column;
   align-items: flex-end;
   gap: 13px;
@@ -145,8 +146,8 @@
 
 .receipt-overview-total > strong {
   color: #101322;
-  font-size: 36px;
-  font-weight: 650;
+  font-size: 30px;
+  font-weight: 850;
   line-height: 1;
   white-space: nowrap;
 }
@@ -159,7 +160,7 @@
 
 .receipt-summary-stats > span {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
   gap: 9px;
   min-width: 0;
@@ -172,8 +173,8 @@
 
 .summary-stat-icon {
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   place-items: center;
   border-radius: 50%;
   background: var(--green-light);
@@ -203,7 +204,7 @@
   display: block;
   margin-top: 4px;
   color: var(--green-dark);
-  font-size: 21px;
+  font-size: 18px;
   font-weight: 900;
   line-height: 1;
   white-space: nowrap;
@@ -211,8 +212,8 @@
 
 .receipt-filter-chips {
   display: grid;
-  grid-template-columns: 0.8fr 1fr 1.55fr 1.55fr;
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   margin: 14px 0 12px;
 }
 
@@ -244,10 +245,14 @@
 
 .receipt-item-card {
   display: grid;
-  grid-template-columns: minmax(112px, 1.5fr) minmax(48px, 0.7fr) minmax(50px, 0.72fr) minmax(58px, 0.82fr) minmax(58px, 0.82fr);
+  grid-template-areas:
+    "product product"
+    "total smartcart";
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   width: 100%;
-  min-height: 100px;
-  padding: 9px;
+  min-height: 148px;
+  padding: 12px;
   border: 1px solid rgba(229, 231, 235, 0.92);
   background: var(--card);
   box-shadow: 0 9px 22px rgba(16, 19, 34, 0.055);
@@ -268,12 +273,14 @@
 }
 
 .receipt-item-product {
+  grid-area: product;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   min-width: 0;
-  padding-right: 7px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 .receipt-item-thumb {
@@ -606,8 +613,8 @@
 .receipt-item-info strong {
   overflow: hidden;
   color: #101322;
-  font-size: 14px;
-  font-weight: 900;
+  font-size: 15px;
+  font-weight: 850;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -627,10 +634,12 @@
   min-width: 0;
   flex-direction: column;
   justify-content: center;
-  gap: 6px;
-  padding: 0 6px;
-
-  border-left: 1px solid var(--border);
+  gap: 8px;
+  min-height: 68px;
+  padding: 12px;
+  border: 1px solid rgba(229, 231, 235, 0.92);
+  border-radius: 12px;
+  background: #f9fafb;
 }
 
 .receipt-item-cell > span {
@@ -649,22 +658,46 @@
 .receipt-item-cell small {
   display: block;
   color: #394154;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 750;
   line-height: 1.15;
-  text-align: center;
+  text-align: left;
 }
 
 .receipt-item-cell strong {
   display: block;
   color: #101322;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 850;
   line-height: 1;
   white-space: nowrap;
-  text-align: center;
-  font-size: 18px;
+  text-align: left;
 
+}
+
+.receipt-item-total {
+  grid-area: total;
+  align-items: flex-start;
+  background: #f8fafc;
+}
+
+.receipt-detail-pill--smartcart {
+  grid-area: smartcart;
+  align-items: center;
+  border-color: rgba(22, 163, 74, 0.18);
+  background: #f1fbf5;
+  text-align: center;
+}
+
+.receipt-detail-pill--smartcart > span {
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.receipt-detail-pill--smartcart small {
+  color: var(--green-dark);
+  text-align: center;
 }
 
 .receipt-detail-pill--discount strong {
@@ -675,71 +708,16 @@
   content: none;
 }
 
-.receipt-detail-pill--store-cashback,
-.receipt-detail-pill--smartcart {
-  align-items: center;
-  text-align: center;
-}
-
-.receipt-detail-pill--store-cashback > span,
-.receipt-detail-pill--smartcart > span {
-  align-items: center;
-  text-align: center;
-}
-
-.receipt-detail-pill--discount > span,
-.receipt-detail-pill--store-cashback > span,
-.receipt-detail-pill--smartcart > span {
-  gap: 0;
-}
-
-.receipt-detail-pill--discount small + strong {
-  margin-top: 12px;
-}
-
-.receipt-detail-pill--store-cashback small + strong {
-  margin-top: 8px;
-}
-
-.receipt-detail-pill--store-cashback strong + em {
-  margin-top: 6px;
-}
-
-.receipt-detail-pill--smartcart small + strong {
-  margin-top: 8px;
-}
-
-.receipt-detail-pill--store-cashback strong {
-  color: var(--green-dark);
-}
-
-.receipt-detail-pill--store-cashback em {
-  display: inline-flex;
-  min-height: 20px;
-  align-items: center;
-  width: fit-content;
-  padding: 0 12px;
-  border: 1px solid rgba(22, 163, 74, 0.18);
-  border-radius: 6px;
-  background: var(--green-light);
-  color: var(--green-dark);
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 850;
-}
-
-
-
 .receipt-detail-pill--smartcart strong:not(.muted-value) {
   display: inline-flex;
   min-height: 28px;
   align-items: center;
   justify-content: center;
   width: fit-content;
-  padding: 0 7px;
+  padding: 0 8px;
   border: 1px solid rgba(22, 163, 74, 0.22);
   border-radius: 8px;
-  background: #f1fbf5;
+  background: #fff;
   color: var(--green-dark);
   font-size: 14px;
 }
@@ -750,8 +728,8 @@
 
 .receipt-total-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 14px;
   margin-top: 14px;
   padding: 14px;
   border: 1px solid rgba(22, 163, 74, 0.14);
@@ -765,8 +743,9 @@
 .receipt-total-list {
   display: grid;
   gap: 12px;
-  padding-right: 14px;
-  border-right: 1px solid rgba(22, 163, 74, 0.15);
+  padding: 0 0 13px;
+  border-right: 0;
+  border-bottom: 1px solid rgba(22, 163, 74, 0.15);
 }
 
 .receipt-total-row {
@@ -817,7 +796,7 @@
 
 .receipt-cashback-total span {
   display: block;
-  max-width: 31ch;
+  max-width: none;
   color: #1f2937;
   font-size: 20px;
   font-weight: 650;
@@ -826,10 +805,10 @@
 
 .receipt-cashback-total strong {
   display: block;
-  margin-top: 18px;
+  margin-top: 10px;
   color: var(--green);
-  font-size: 48px;
-  font-weight: 650;
+  font-size: 40px;
+  font-weight: 850;
   line-height: 1;
 }
 
@@ -874,6 +853,9 @@
   }
 
   .receipt-item-card {
+    grid-template-areas:
+      "product product"
+      "total smartcart";
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 9px;
     min-height: 0;
@@ -881,7 +863,6 @@
   }
 
   .receipt-item-product {
-    grid-column: 1 / -1;
     padding: 0 0 10px;
     border-bottom: 1px solid var(--border);
   }
@@ -969,9 +950,9 @@
 
   .receipt-item-card {
     grid-template-areas:
-      "product product total"
-      "discount store smartcart";
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+      "product product"
+      "total smartcart";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px 6px;
     min-height: 0;
     padding: 12px 10px 10px;
@@ -989,13 +970,16 @@
   }
 
   .receipt-item-product {
-    grid-area: product;
     grid-template-columns: 48px minmax(0, 1fr);
     gap: 9px;
     padding: 0 0 10px;
     border-bottom: 1px solid var(--border);
   }
 
+  .receipt-item-product span {
+    align-items: center;
+  }
+  
   .receipt-item-thumb {
     width: 48px;
     height: 48px;
@@ -1014,71 +998,29 @@
     min-width: 0;
     min-height: 68px;
     padding: 8px 6px;
-    border-left: 0;
     border-radius: 12px;
-    background: #f9fafb;
   }
 
   .receipt-item-total {
-    grid-area: total;
     min-height: 0;
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
     gap: 6px;
-    padding: 0 0 10px 8px;
-    border-bottom: 1px solid var(--border);
-    border-left: 1px solid var(--border);
-    border-radius: 0;
-    background: transparent;
+    padding: 8px 10px;
     text-align: left;
   }
 
-  .receipt-detail-pill--discount {
-    grid-area: discount;
-    background: #fffaf6;
-  }
-
-  .receipt-detail-pill--store-cashback {
-    grid-area: store;
-    background: #f8fbf9;
-  }
-
   .receipt-detail-pill--smartcart {
-    grid-area: smartcart;
     border: 1px solid rgba(22, 163, 74, 0.16);
     background: #f1fbf5;
   }
 
-  .receipt-detail-pill--discount > span,
-  .receipt-detail-pill--store-cashback > span,
   .receipt-detail-pill--smartcart > span {
     display: grid;
-    grid-template-rows: 26px auto auto;
+    grid-template-rows: 26px auto;
     height: 100%;
     min-width: 0;
-  }
-
-  .receipt-detail-pill--store-cashback > span {
-    grid-template-columns: minmax(0, auto) auto;
-    grid-template-rows: 26px auto;
-    justify-content: center;
-    column-gap: 5px;
-  }
-
-  .receipt-detail-pill--store-cashback small {
-    grid-column: 1 / -1;
-  }
-
-  .receipt-detail-pill--store-cashback strong {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .receipt-detail-pill--store-cashback em {
-    grid-column: 2;
-    grid-row: 2;
-    align-self: center;
   }
 
   .receipt-item-cell strong {
@@ -1113,14 +1055,11 @@
   }
 
   .receipt-item-cell > span,
-  .receipt-detail-pill--store-cashback > span,
   .receipt-detail-pill--smartcart > span {
     align-items: center;
     text-align: center;
   }
 
-  .receipt-detail-pill--discount small,
-  .receipt-detail-pill--store-cashback small,
   .receipt-detail-pill--smartcart small {
     display: flex;
     min-height: 26px;
@@ -1128,17 +1067,8 @@
     justify-content: center;
   }
 
-  .receipt-detail-pill--discount small + strong,
-  .receipt-detail-pill--store-cashback small + strong,
   .receipt-detail-pill--smartcart small + strong {
     margin-top: 5px;
-  }
-
-  .receipt-detail-pill--store-cashback em {
-    margin-top: 0;
-    min-height: 20px;
-    padding-inline: 6px;
-    font-size: 10px;
   }
 
   .receipt-detail-pill--smartcart strong:not(.muted-value) {

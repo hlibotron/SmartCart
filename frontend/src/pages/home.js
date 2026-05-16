@@ -4,7 +4,8 @@ import {
   metrics as fallbackMetrics,
   shortcuts,
 } from "../data/home.js";
-import { assetUrl, fetchJson, rerenderRoute } from "../shared/api.js";
+import { apiUrl, assetUrl, fetchJson, rerenderRoute } from "../shared/api.js";
+import { authHeaders } from "../shared/authSession.js";
 import { icon } from "../shared/icons.js";
 import { appHref } from "../shared/navigation.js";
 
@@ -56,8 +57,11 @@ async function uploadReceiptPhoto(file) {
   const formData = new FormData();
   formData.append("image", file);
 
-  const response = await fetch("/api/receipt-scans/upload", {
+  const response = await fetch(apiUrl("/api/receipt-scans/upload"), {
     method: "POST",
+    headers: {
+      ...authHeaders(),
+    },
     body: formData,
   });
 
