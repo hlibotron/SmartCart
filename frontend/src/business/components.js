@@ -269,6 +269,21 @@ export function businessFilterApiPath(path) {
   return query ? `${path}?${query}` : path;
 }
 
+export function businessHref(path) {
+  const params = new URLSearchParams(window.location.search);
+  const nextParams = new URLSearchParams();
+
+  businessFilterKeys.forEach((key) => {
+    const value = params.get(key);
+    if (value) {
+      nextParams.set(key, value);
+    }
+  });
+
+  const query = nextParams.toString();
+  return appHref(query ? `${path}?${query}` : path);
+}
+
 export function renderBusinessSidebar(activeKey = "overview") {
   const topItems = sidebarItems.filter((item) => !item.bottom);
   const bottomItems = sidebarItems.filter((item) => item.bottom);
@@ -280,7 +295,7 @@ export function renderBusinessSidebar(activeKey = "overview") {
     return `
       <a
         class="business-sidebar-link${active ? " active" : ""}"
-        href="${appHref(item.href)}"
+        href="${businessHref(item.href)}"
         ${linkAttr}
         ${active ? 'aria-current="page"' : ""}
       >
@@ -296,12 +311,12 @@ export function renderBusinessSidebar(activeKey = "overview") {
         <a class="business-platform-switcher-link interactive" href="${appHref("/")}" data-link data-short="К">
           Клієнт
         </a>
-        <a class="business-platform-switcher-link active interactive" href="${appHref("/business")}" data-link data-short="Б" aria-current="page">
+        <a class="business-platform-switcher-link active interactive" href="${businessHref("/business")}" data-link data-short="Б" aria-current="page">
           Бізнес
         </a>
       </nav>
 
-      <a class="business-sidebar-brand" href="${appHref("/business")}" data-link aria-label="SmartCart Business">
+      <a class="business-sidebar-brand" href="${businessHref("/business")}" data-link aria-label="SmartCart Business">
         ${cartIcon("business-sidebar-logo")}
         <span>
           <strong>SmartCart</strong>

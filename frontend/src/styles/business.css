@@ -664,19 +664,71 @@
   align-items: center;
 }
 
+.business-overview-card--geo .business-geo-layout {
+  grid-template-columns: minmax(0, 1.56fr) minmax(132px, 0.64fr);
+  gap: 14px;
+}
+
+.business-overview-map-wrap {
+  position: relative;
+  min-height: 284px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
 .business-ukraine-map {
+  display: block;
   width: 100%;
-  min-height: 168px;
 }
 
-.map-region {
-  fill: #dff3e8;
-  stroke: #fff;
-  stroke-width: 2.2;
+.business-overview-map-wrap .business-ukraine-map {
+  min-height: 284px;
 }
 
-.map-region--strong {
-  fill: #9fddba;
+.business-overview-map-wrap .business-region-map-shadow {
+  filter: drop-shadow(0 16px 28px rgba(15, 23, 42, 0.18));
+}
+
+.business-overview-map-wrap .business-region-map-outline {
+  stroke: rgba(24, 92, 56, 0.78);
+  stroke-width: 3.4;
+}
+
+.business-overview-map-wrap .business-map-community {
+  stroke-width: 1.05;
+}
+
+.business-overview-map-wrap .business-map-controls {
+  top: 10px;
+  left: 10px;
+}
+
+.business-overview-map-wrap .business-map-control {
+  width: 30px;
+  height: 30px;
+}
+
+.business-overview-map-wrap .business-map-zoom-label {
+  min-width: 46px;
+  height: 30px;
+  font-size: 11px;
+}
+
+.business-overview-map-wrap .business-map-tooltip {
+  top: 10px;
+  right: 10px;
+  gap: 5px;
+  min-width: 132px;
+  padding: 10px;
+}
+
+.business-overview-map-wrap .business-map-tooltip strong,
+.business-overview-map-wrap .business-map-tooltip b {
+  font-size: 12px;
+}
+
+.business-overview-map-wrap .business-map-tooltip span {
+  font-size: 11px;
 }
 
 .business-card-metrics {
@@ -798,6 +850,33 @@
   min-height: 300px;
 }
 
+.business-overview-card--forecast.business-elasticity-card {
+  padding: 16px;
+}
+
+.business-overview-card--forecast .business-chart-legend {
+  margin: -2px 0 4px 46px;
+}
+
+.business-overview-card--forecast .business-elasticity-legend {
+  gap: 18px;
+}
+
+.business-overview-card--forecast .business-elasticity-legend i {
+  background: #2563eb;
+}
+
+.business-overview-card--forecast .business-elasticity-legend span:nth-child(2) i {
+  background: repeating-linear-gradient(90deg, #10b981 0 6px, transparent 6px 10px);
+}
+
+.business-overview-card--forecast .business-elasticity-legend span:nth-child(3) i {
+  width: 12px;
+  height: 12px;
+  background: #ef4444;
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 56%, 79% 91%, 50% 70%, 21% 91%, 32% 56%, 2% 35%, 39% 35%);
+}
+
 .business-chart-legend {
   display: flex;
   gap: 28px;
@@ -827,6 +906,33 @@
 .business-forecast-chart {
   width: 100%;
   min-height: 142px;
+}
+
+.business-overview-elasticity-chart {
+  min-height: 214px;
+  margin-top: 2px;
+}
+
+.business-overview-revenue-line,
+.business-overview-probability-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.business-overview-revenue-line {
+  stroke: #2563eb;
+  stroke-width: 3;
+}
+
+.business-overview-probability-line {
+  stroke: #10b981;
+  stroke-width: 2.4;
+  stroke-dasharray: 6 4;
+}
+
+.business-overview-optimal-star {
+  fill: #ef4444;
 }
 
 .chart-grid path {
@@ -1028,65 +1134,220 @@
 
 .business-region-map {
   display: block;
+  position: relative;
   width: 100%;
-  height: 282px;
+  aspect-ratio: 720 / 410;
+  min-height: 282px;
+  overflow: hidden;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(69, 189, 116, 0.08), transparent 34%),
+    linear-gradient(180deg, #f8fbf9 0%, #eef5f1 100%);
 }
 
-.geo-region {
-  stroke: #fff;
-  stroke-width: 3;
+.business-region-map-surface,
+.business-region-map-tiles,
+.business-region-map-overlay {
+  position: absolute;
+  inset: 0;
 }
 
-.geo-region--1 {
-  fill: #edf3f7;
+.business-region-map-surface {
+  width: 720px;
+  height: 410px;
+  overflow: hidden;
+  background: #edf4ef;
 }
 
-.geo-region--2 {
-  fill: #dff3e8;
+.business-region-map-tile {
+  position: absolute;
+  display: block;
+  width: 256px;
+  height: 256px;
+  filter: grayscale(0.22) saturate(0.62) contrast(1.05) brightness(1.04);
+  object-fit: cover;
+  user-select: none;
 }
 
-.geo-region--3 {
-  fill: #c5ead4;
+.business-region-map-overlay {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(12, 96, 70, 0.08)),
+    radial-gradient(circle at 47% 42%, rgba(69, 189, 116, 0.12), transparent 36%),
+    rgba(246, 251, 248, 0.18);
+  mix-blend-mode: screen;
+  pointer-events: none;
 }
 
-.geo-region--4 {
-  fill: #91d9ad;
-}
-
-.geo-region--5,
-.geo-region--selected {
-  fill: #45bd74;
-}
-
-.geo-region--selected {
-  stroke: var(--sc-green-dark);
-  stroke-width: 4;
-}
-
-.geo-border {
-  fill: none;
-  stroke: rgba(148, 163, 184, 0.18);
-  stroke-width: 2;
-}
-
-.geo-city-dot {
+.business-region-map-shadow {
   fill: #fff;
-  stroke: var(--sc-green-dark);
-  stroke-width: 4;
+  filter: drop-shadow(0 18px 34px rgba(15, 23, 42, 0.14));
+}
+
+.business-community-layer {
+  pointer-events: auto;
+}
+
+.business-map-community {
+  fill: rgba(236, 253, 245, 0.42);
+  mix-blend-mode: multiply;
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-linejoin: round;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+  transition:
+    fill 140ms ease,
+    stroke 140ms ease,
+    stroke-width 140ms ease;
+}
+
+.business-map-community[data-level="2"] {
+  fill: rgba(187, 247, 208, 0.46);
+}
+
+.business-map-community[data-level="3"] {
+  fill: rgba(134, 239, 172, 0.5);
+}
+
+.business-map-community[data-level="4"] {
+  fill: rgba(74, 222, 128, 0.58);
+}
+
+.business-map-community[data-level="5"] {
+  fill: rgba(22, 163, 74, 0.66);
+}
+
+.business-map-community:hover,
+.business-map-community.is-active {
+  filter: drop-shadow(0 4px 8px rgba(15, 23, 42, 0.16));
+  stroke: rgba(21, 128, 61, 0.9);
+  stroke-width: 2.2;
+}
+
+.business-region-map-outline {
+  fill: none;
+  stroke: rgba(26, 92, 56, 0.66);
+  stroke-linejoin: round;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.business-map-controls {
+  position: absolute;
+  top: 14px;
+  left: 12px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
+
+.business-map-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #1f3328;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.business-map-control + .business-map-control,
+.business-map-zoom-label + .business-map-control,
+.business-map-control + .business-map-zoom-label {
+  border-left: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.business-map-control svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.4;
+}
+
+.business-map-control:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.business-map-zoom-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  height: 34px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.business-community-tooltip {
+  position: absolute;
+  z-index: 8;
+  display: grid;
+  gap: 5px;
+  min-width: 168px;
+  padding: 11px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.17);
+  pointer-events: none;
+}
+
+.business-community-tooltip[hidden] {
+  display: none;
+}
+
+.business-community-tooltip strong {
+  color: var(--sc-text);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.business-community-tooltip b {
+  color: var(--sc-green);
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.business-map-attribution {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  z-index: 4;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #475569;
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
 }
 
 .business-map-tooltip {
   position: absolute;
-  top: 78px;
-  left: 54%;
+  top: 14px;
+  right: 14px;
   display: grid;
   gap: 7px;
   min-width: 178px;
   padding: 14px;
-  border: 1px solid var(--sc-border);
-  border-radius: 10px;
-  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+  z-index: 5;
 }
 
 .business-map-tooltip strong,
@@ -1105,7 +1366,7 @@
 .business-map-legend {
   position: absolute;
   bottom: 14px;
-  left: 0;
+  left: 12px;
   display: grid;
   gap: 5px;
   width: 116px;
@@ -1114,6 +1375,7 @@
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.86);
   box-shadow: var(--sc-shadow);
+  z-index: 5;
 }
 
 .business-map-legend strong,
@@ -2312,13 +2574,34 @@
   }
 
   .business-region-map {
-    height: 230px;
+    min-height: 230px;
   }
 
   .business-map-tooltip {
-    top: 60px;
-    left: 45%;
+    top: 52px;
+    right: 8px;
     min-width: 150px;
+    padding: 10px;
+  }
+
+  .business-map-controls {
+    top: 8px;
+    left: 8px;
+  }
+
+  .business-map-control {
+    width: 32px;
+    height: 32px;
+  }
+
+  .business-map-zoom-label {
+    min-width: 48px;
+    height: 32px;
+  }
+
+  .business-map-legend {
+    left: 8px;
+    bottom: 10px;
   }
 
   .business-week-heatmap,

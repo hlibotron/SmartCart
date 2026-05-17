@@ -3537,8 +3537,8 @@ async def business_geography(
             },
         },
         "map": {
-            "selectedRegion": top_store["store"],
-            "selectedRegionSales": business_money(top_store["amount"]),
+            "selectedRegion": geo_selection["label"] if geo_selection["label"] != "Вся Україна" else "Київська область",
+            "selectedRegionSales": business_money(total),
             "selectedRegionGrowth": "+0%",
         },
         "mapLegend": [
