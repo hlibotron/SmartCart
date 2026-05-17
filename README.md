@@ -62,6 +62,7 @@ smartcart/
 - npm
 - Docker Desktop or another local PostgreSQL setup
 - Git
+  (check app/requirements.txt for detailed list)
 
 ## Local Setup
 
