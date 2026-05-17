@@ -3874,36 +3874,14 @@ async def product_store_prices_map(
         if retailer == "all" or group["chainKey"] == retailer
     }
 
-    location_result = await db.execute(
-        select(RetailStoreLocation).where(func.lower(RetailStoreLocation.city) == city.lower())
-    )
-    locations_by_chain: dict[str, list[RetailStoreLocation]] = defaultdict(list)
-    for location in location_result.scalars().all():
-        locations_by_chain[location.chain_key].append(location)
-
-    used_location_ids: set[int] = set()
     stores = []
     for index, (store_key, group) in enumerate(filtered_grouped.items()):
-        locations = locations_by_chain.get(group["chainKey"], [])
-        location = next(
-            (
-                item
-                for item in locations
-                if item.id not in used_location_ids
-                and item.lat is not None
-                and item.lon is not None
-            ),
-            None,
-        )
-        if location is not None:
-            used_location_ids.add(location.id)
-
         stores.append(
             receipt_store_map_payload(
                 store_key=store_key,
                 store_name=group["storeName"],
                 entries=group["entries"],
-                location=location,
+                location=None,
             )
         )
 
@@ -3930,7 +3908,11 @@ async def product_store_prices_map(
         "product": {"id": product.id, "name": product.name},
         "city": city,
         "center": {"lat": 50.4501, "lng": 30.5234, "source": "city_default"},
-        "mapStatus": "ready" if stores else "missing_receipts",
+        "mapStatus": (
+            "missing_receipts"
+            if not stores
+            else ("ready" if coordinate_count else "missing_coordinates")
+        ),
         "coordinateNotice": (
             "Для частини магазинів у чеках немає точної адреси/координат. "
             "Такі точки тимчасово розміщуються приблизно в межах області."

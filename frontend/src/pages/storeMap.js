@@ -96,32 +96,6 @@ function normalizeStoreId(store) {
   return String(store.storeId ?? `${store.retailer || "store"}-${store.address || ""}`);
 }
 
-function hashString(value) {
-  return Array.from(String(value || "")).reduce(
-    (hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0,
-    2166136261,
-  );
-}
-
-function estimatedCoordinateForStore(store, index) {
-  const value = hashString(`${store.chainKey || store.retailer || ""}:${store.address || ""}:${index}`);
-  const latitudeRatio = ((value >>> 4) % 1000) / 1000;
-  const longitudeRatio = ((value >>> 14) % 1000) / 1000;
-  const latitudePadding = (kyivRegionBounds.north - kyivRegionBounds.south) * 0.12;
-  const longitudePadding = (kyivRegionBounds.east - kyivRegionBounds.west) * 0.12;
-
-  return {
-    latitude:
-      kyivRegionBounds.south +
-      latitudePadding +
-      latitudeRatio * (kyivRegionBounds.north - kyivRegionBounds.south - latitudePadding * 2),
-    longitude:
-      kyivRegionBounds.west +
-      longitudePadding +
-      longitudeRatio * (kyivRegionBounds.east - kyivRegionBounds.west - longitudePadding * 2),
-  };
-}
-
 function isKyivRegionCoordinate(latitude, longitude) {
   return (
     latitude >= kyivRegionBounds.south &&
@@ -145,12 +119,11 @@ function storesForMap() {
       };
     }
 
-    const estimated = estimatedCoordinateForStore(store, index);
     return {
       ...store,
-      latitude: estimated.latitude,
-      longitude: estimated.longitude,
-      isEstimatedCoordinate: true,
+      latitude: null,
+      longitude: null,
+      isEstimatedCoordinate: false,
     };
   });
 }
