@@ -13,6 +13,19 @@ receipt and official-store price data.
 - Secrets: do not commit local `.env` files or real API keys. Use
   `.env.example` and `frontend/.env.example` as templates.
 
+## License
+
+SmartCart is provided under the [SmartCart Non-Commercial License](LICENSE).
+The repository may be viewed, cloned, run, evaluated, and demonstrated for
+non-commercial purposes, including hackathon judging and demo review.
+
+Commercial use, resale, sublicensing, paid hosting, monetized services,
+integration into commercial products, and business use of the analytics,
+pricing, receipt-processing, or data features require prior written permission
+from the copyright holders.
+
+Third-party dependencies remain under their own license terms.
+
 ## Product Features
 
 - Receipt scanning and structured item extraction.
