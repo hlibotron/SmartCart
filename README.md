@@ -170,6 +170,155 @@ npm run build
 npm run preview
 ```
 
+## Run Command Summary
+
+Database:
+
+```bash
+docker start ai-receipts-db
+```
+
+Backend:
+
+```bash
+source .venv/bin/activate
+python -m uvicorn app.main:app --reload
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Seed demo data:
+
+```bash
+source .venv/bin/activate
+python -m app.seed_mock_receipt
+python -m app.seed_demo_price_data
+```
+
+## Troubleshooting
+
+`Cannot connect to the Docker daemon`
+
+Docker is not running. Start Docker Desktop or your local Docker service, then
+try again:
+
+```bash
+docker start ai-receipts-db
+```
+
+`Conflict. The container name "/ai-receipts-db" is already in use`
+
+The database container already exists. Start the existing container instead of
+creating a new one:
+
+```bash
+docker start ai-receipts-db
+```
+
+`Bind for 0.0.0.0:5433 failed: port is already allocated`
+
+Another process is already using port `5433`. Stop that process, or expose
+PostgreSQL on another port and update `DATABASE_URL` in `.env` to match it.
+
+Example for host port `5434`:
+
+```bash
+docker run --name ai-receipts-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=receipts_db \
+  -p 5434:5432 \
+  -d postgres
+```
+
+```text
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5434/receipts_db
+```
+
+`ConnectionRefusedError`, `database system is starting up`, or DB health check
+fails
+
+Make sure PostgreSQL is running and the backend `.env` uses the same port:
+
+```bash
+docker start ai-receipts-db
+source .venv/bin/activate
+python -m app.check_db
+```
+
+If tables are missing, initialize the database:
+
+```bash
+python -m app.init_db
+```
+
+`ModuleNotFoundError`, `No module named fastapi`, or `uvicorn: command not found`
+
+The Python virtual environment is not active or dependencies were not installed:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+If `python` points to an older version, use `python3` for the same commands.
+
+`npm: command not found`, Vite startup errors, or unsupported Node.js version
+
+Install Node.js 20+ and npm, then reinstall frontend dependencies:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+`Port 5173 is already in use`
+
+Run Vite on another port:
+
+```bash
+cd frontend
+npm run dev -- --port 5174
+```
+
+If you change the frontend port, also add it to `CORS_ORIGINS` in `.env`:
+
+```text
+CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174
+```
+
+Frontend shows API errors or `Failed to fetch`
+
+Check that the backend is running at `http://127.0.0.1:8000`:
+
+```bash
+source .venv/bin/activate
+python -m uvicorn app.main:app --reload
+```
+
+Then open:
+
+- `http://127.0.0.1:8000/health`
+- `http://127.0.0.1:8000/api/db/health`
+
+Receipt photo extraction fails
+
+Real receipt extraction requires `OPENAI_API_KEY` in `.env`. Without this key,
+use seeded/demo data instead:
+
+```bash
+source .venv/bin/activate
+python -m app.seed_mock_receipt
+python -m app.seed_demo_price_data
+```
+
 ## Demo Flow
 
 1. Start PostgreSQL.
