@@ -8,6 +8,7 @@ import { renderOnboardingStep } from "../../components/onboarding/OnboardingStep
 let currentStep = 0;
 let locationSearchTimer = null;
 let locationSearchRequest = 0;
+const locationSearchCache = new Map();
 let locationState = {
   activeLevel: "city",
   query: "",
@@ -64,6 +65,18 @@ function loadLocationResults({ force = false } = {}) {
   if (query) {
     params.set("q", query);
   }
+  const cacheKey = params.toString();
+  const cachedItems = locationSearchCache.get(cacheKey);
+  if (cachedItems) {
+    locationState = {
+      ...locationState,
+      loading: false,
+      loadedKey: requestKey,
+      items: cachedItems,
+    };
+    window.dispatchEvent(new Event("popstate"));
+    return;
+  }
 
   locationState = {
     ...locationState,
@@ -82,6 +95,7 @@ function loadLocationResults({ force = false } = {}) {
         loading: false,
         items: Array.isArray(data.items) ? data.items : [],
       };
+      locationSearchCache.set(cacheKey, locationState.items);
       window.dispatchEvent(new Event("popstate"));
     })
     .catch((error) => {

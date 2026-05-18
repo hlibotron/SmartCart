@@ -12,6 +12,7 @@ let authState = {
 };
 let citySearchTimer = null;
 let citySearchRequest = 0;
+const citySearchCache = new Map();
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -238,6 +239,15 @@ export function bindAuthPage() {
     citySearchTimer = window.setTimeout(() => {
       const params = new URLSearchParams({ level: "city", limit: "25" });
       params.set("q", query);
+      const cacheKey = params.toString();
+      const cachedItems = citySearchCache.get(cacheKey);
+      if (cachedItems) {
+        if (requestId === citySearchRequest) {
+          renderCityDropdown(cachedItems, { query });
+          cityInput.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
 
       fetchJson(`/api/business/geography-units?${params.toString()}`)
         .then((data) => {
@@ -246,6 +256,7 @@ export function bindAuthPage() {
           }
 
           const items = Array.isArray(data.items) ? data.items : [];
+          citySearchCache.set(cacheKey, items);
           renderCityDropdown(items, { query });
           cityInput.setAttribute("aria-expanded", "true");
         })

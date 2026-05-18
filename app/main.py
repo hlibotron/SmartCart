@@ -19,7 +19,7 @@ from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, U
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
-from sqlalchemy import case, func, inspect as sa_inspect, or_, select, text
+from sqlalchemy import func, inspect as sa_inspect, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1566,6 +1566,71 @@ def geo_unit_payload(unit: AdminGeoUnit | None) -> dict | None:
         "communityCode": unit.community_code or (unit.code if unit.level == "community" else ""),
         "communityName": unit.community_name or (unit.name if unit.level == "community" else ""),
     }
+
+
+GEO_UNITS_CACHE_TTL_SECONDS = 300
+geo_units_cache = {
+    "loaded_at": 0.0,
+    "items": [],
+}
+
+
+def normalized_geo_query(value: str) -> str:
+    return " ".join((value or "").lower().split())
+
+
+def geo_unit_cache_entry(unit: AdminGeoUnit) -> dict:
+    payload = geo_unit_payload(unit) or {}
+    search_text = normalized_geo_query(
+        " ".join(
+            str(value or "")
+            for value in (
+                unit.name,
+                unit.type_name,
+                unit.region_name,
+                unit.community_name,
+                unit.search_text,
+            )
+        )
+    )
+
+    return {
+        **payload,
+        "_name": normalized_geo_query(unit.name),
+        "_search": search_text,
+    }
+
+
+async def cached_geo_units(db: AsyncSession) -> list[dict]:
+    now = time.monotonic()
+    if geo_units_cache["items"] and now - geo_units_cache["loaded_at"] < GEO_UNITS_CACHE_TTL_SECONDS:
+        return geo_units_cache["items"]
+
+    result = await db.execute(select(AdminGeoUnit).order_by(AdminGeoUnit.name))
+    items = [geo_unit_cache_entry(unit) for unit in result.scalars().all()]
+    geo_units_cache["items"] = items
+    geo_units_cache["loaded_at"] = now
+    return items
+
+
+def geo_unit_matches_level(item: dict, level: str) -> bool:
+    if level == "city":
+        return item.get("level") == "city" or "місто зі спеціальним статусом" in normalized_geo_query(item.get("type"))
+
+    return item.get("level") == level
+
+
+def geo_unit_rank(item: dict, query: str) -> tuple[int, str]:
+    name = item.get("_name") or ""
+    if not query:
+        return (0, name)
+    if name == query:
+        return (0, name)
+    if name.startswith(query):
+        return (1, name)
+    if query in name:
+        return (2, name)
+    return (3, name)
 
 
 async def business_geography_selection(db: AsyncSession, context: dict) -> dict:
@@ -3119,49 +3184,32 @@ async def business_geography_units(
         raise HTTPException(status_code=400, detail="Unsupported geography level")
 
     capped_limit = min(max(limit, 1), 80)
-    if level == "city":
-        stmt = select(AdminGeoUnit).where(
-            or_(
-                AdminGeoUnit.level == "city",
-                AdminGeoUnit.type_name.ilike("%місто зі спеціальним статусом%"),
-            )
-        )
-    else:
-        stmt = select(AdminGeoUnit).where(AdminGeoUnit.level == level)
+    query = normalized_geo_query(q)
+    items = await cached_geo_units(db)
+    filtered_items = []
 
-    query = q.strip()
+    for item in items:
+        if not geo_unit_matches_level(item, level):
+            continue
+        if level in {"community", "city"} and region and item.get("regionCode") != region:
+            continue
+        if level == "city" and community and item.get("communityCode") != community:
+            continue
+        if query and query not in (item.get("_search") or ""):
+            continue
+
+        filtered_items.append(item)
+
     if query:
-        query_pattern = f"%{query}%"
-        prefix_pattern = f"{query}%"
-        stmt = stmt.where(
-            or_(
-                AdminGeoUnit.name.ilike(query_pattern),
-                AdminGeoUnit.search_text.ilike(query_pattern),
-            )
-        )
-        order_by = (
-            case(
-                (func.lower(AdminGeoUnit.name) == query.lower(), 0),
-                (AdminGeoUnit.name.ilike(prefix_pattern), 1),
-                (AdminGeoUnit.name.ilike(query_pattern), 2),
-                else_=3,
-            ),
-            AdminGeoUnit.name,
-        )
-    else:
-        order_by = (AdminGeoUnit.name,)
-
-    if level in {"community", "city"} and region:
-        stmt = stmt.where(AdminGeoUnit.region_code == region)
-
-    if level == "city" and community:
-        stmt = stmt.where(AdminGeoUnit.community_code == community)
-
-    result = await db.execute(stmt.order_by(*order_by).limit(capped_limit))
+        filtered_items.sort(key=lambda item: geo_unit_rank(item, query))
     return {
         "items": [
-            geo_unit_payload(unit)
-            for unit in result.scalars().all()
+            {
+                key: value
+                for key, value in item.items()
+                if not key.startswith("_")
+            }
+            for item in filtered_items[:capped_limit]
         ]
     }
 
